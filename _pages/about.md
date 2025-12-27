@@ -29,6 +29,6 @@ announcements:
 
 I am a senior undergraduate student at Kookmin University and an undergraduate researcher at [EdgeAI Lab](https://sites.google.com/view/djhan930/home) (Yonsei University), advised by Prof. Dongjun Han. I am also affiliated with [EAIC Lab](https://eaic.kr/) (Kookmin University) under the supervision of Prof. Eunji Kwon.
 
-My research interests focus on resource-efficient AI models, particularly on mitigating safety risks and performance degradation induced by model compression and efficiency-oriented optimizations.
+My research interests focus on **resource-efficient AI models**, particularly on mitigating safety risks and performance degradation induced by model compression and efficiency-oriented optimizations.
 
 Previously, I worked as an undergraduate researcher at [EffL Lab](https://effl.postech.ac.kr/) (POSTECH), advised by Prof. Jaeho Lee, and as a visiting student researcher at the [Dutt Research Group](https://duttgroup.ics.uci.edu/) (University of California, Irvine) under the supervision of Prof. Nikil Dutt.
