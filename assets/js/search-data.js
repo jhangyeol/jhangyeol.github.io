@@ -24,8 +24,8 @@ ninja.data = [{
             },},{id: "news-started-undergraduate-research-internship-at-effl-lab-postech",
           title: 'Started undergraduate research internship at EFFL Lab, POSTECH.',
           description: "",
-          section: "News",},{id: "news-started-undergraduate-research-internship-at-edgeai-lab-yonsei",
-          title: 'Started undergraduate research internship at EdgeAI Lab, Yonsei.',
+          section: "News",},{id: "news-started-undergraduate-research-internship-at-edgeai-lab-yonsei-university",
+          title: 'Started undergraduate research internship at EdgeAI Lab, Yonsei University.',
           description: "",
           section: "News",},{
         id: 'social-cv',
