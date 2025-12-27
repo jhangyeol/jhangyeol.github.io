@@ -5,4 +5,4 @@ inline: true
 related_posts: false
 ---
 
-Started undergraduate research internship at EdgeAI Lab, Yonsei.
+Started undergraduate research internship at EdgeAI Lab, Yonsei University.
