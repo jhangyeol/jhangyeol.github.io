@@ -49,6 +49,13 @@ ninja.data = [{
           window.open("https://www.linkedin.com/in/hkjung1123", "_blank");
         },
       },{
+        id: 'social-scholar',
+        title: 'Google Scholar',
+        section: 'Socials',
+        handler: () => {
+          window.open("https://scholar.google.com/citations?user=yGVBIPUAAAAJ", "_blank");
+        },
+      },{
         id: 'social-custom_social',
         title: 'Custom_social',
         section: 'Socials',
