@@ -2,7 +2,7 @@
 layout: about
 title: about
 permalink: /
-subtitle: <a href='#'>Affiliations</a>. Address. Contacts. Motto. Etc.
+subtitle: Undergraduate Researcher @Yonsei Univ, Senior Student @Kookmin Univ. <br/> hkjung1123 [at] gmail [dot] com
 
 profile:
   align: right
