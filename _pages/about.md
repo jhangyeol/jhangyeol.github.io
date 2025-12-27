@@ -21,14 +21,14 @@ announcements:
   scrollable: true # adds a vertical scroll bar if there are more than 3 news items
   limit: 5 # leave blank to include all the news in the `_news` folder
 
-latest_posts:
-  enabled: true
-  scrollable: true # adds a vertical scroll bar if there are more than 3 new posts items
-  limit: 3 # leave blank to include all the blog posts
+# latest_posts:
+#   enabled: true
+#   scrollable: true # adds a vertical scroll bar if there are more than 3 new posts items
+#   limit: 3 # leave blank to include all the blog posts
 ---
 
-Write your biography here. Tell the world about yourself. Link to your favorite [subreddit](http://reddit.com). You can put a picture in, too. The code is already in, just name your picture `prof_pic.jpg` and put it in the `img/` folder.
+I am a senior undergraduate student at Kookmin University and an undergraduate researcher at [EdgeAI Lab](https://sites.google.com/view/djhan930/home) (Yonsei University), advised by Prof. Dongjun Han. I am also affiliated with [EAIC Lab](https://eaic.kr/) (Kookmin University) under the supervision of Prof. Eunji Kwon. 
 
-Put your address / P.O. box / other info right below your picture. You can also disable any of these elements by editing `profile` property of the YAML header of your `_pages/about.md`. Edit `_bibliography/papers.bib` and Jekyll will render your [publications page](/al-folio/publications/) automatically.
+My research interests focus on resource-efficient AI models, particularly on mitigating safety risks and performance degradation induced by model compression and efficiency-oriented optimizations.
 
-Link to your social media connections, too. This theme is set up to use [Font Awesome icons](https://fontawesome.com/) and [Academicons](https://jpswalsh.github.io/academicons/), like the ones below. Add your Facebook, Twitter, LinkedIn, Google Scholar, or just disable all of them.
+Previously, I worked as an undergraduate researcher at [EffL Lab](https://effl.postech.ac.kr/) (POSTECH), advised by Prof. Jaeho Lee, and as a visiting student researcher at the [Dutt Research Group](https://duttgroup.ics.uci.edu/) (University of California, Irvine) under the supervision of Prof. Nikil Dutt.
