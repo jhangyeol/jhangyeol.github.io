@@ -1,7 +1,7 @@
 ---
 layout: page
 title: PathOs
-description: Pathology Optimal Efficient Segmentation Tool Based on Human-in-the-loop Strategy 
+description: Pathology Optimal Efficient Segmentation Tool Based on Human-in-the-loop Strategy
 img: assets/img/12.jpg
 importance: 1
 category: work

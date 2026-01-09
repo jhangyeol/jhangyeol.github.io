@@ -35,7 +35,7 @@ announcements:
 #   limit: 3 # leave blank to include all the blog posts
 ---
 
-I am a senior undergraduate student at Kookmin University and an undergraduate researcher at [EdgeAI Lab](https://sites.google.com/view/djhan930/home) (Yonsei University), advised by Prof. Dongjun Han. 
+I am a senior undergraduate student at Kookmin University and an undergraduate researcher at [EdgeAI Lab](https://sites.google.com/view/djhan930/home) (Yonsei University), advised by Prof. Dongjun Han.
 
 My research interests focus on **resource-efficient AI models**, particularly on mitigating safety risks and performance degradation induced by model compression and efficiency-oriented optimizations.
 
