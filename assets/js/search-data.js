@@ -34,9 +34,9 @@ ninja.data = [{
           section: "News",},{id: "news-started-undergraduate-research-internship-at-edgeai-lab-yonsei-university",
           title: 'Started undergraduate research internship at EdgeAI Lab, Yonsei University.',
           description: "",
-          section: "News",},{id: "projects-project-1",
-          title: 'project 1',
-          description: "with background image",
+          section: "News",},{id: "projects-pathos",
+          title: 'PathOs',
+          description: "Pathology Optimal Efficient Segmentation Tool Based on Human-in-the-loop Strategy",
           section: "Projects",handler: () => {
               window.location.href = "/projects/example_project.html";
             },},{
