@@ -3,7 +3,7 @@ layout: about
 title: about
 permalink: /
 subtitle: >
-  Undergraduate Researcher @Yonsei Univ, Senior Student @Kookmin Univ.<br/>
+  Undergraduate Researcher<br/>
   <span style="font-size: 0.85em; font-style: italic;">
     hkjung1123 [at] gmail [dot] com
   </span>
@@ -35,7 +35,7 @@ announcements:
 #   limit: 3 # leave blank to include all the blog posts
 ---
 
-I am a senior undergraduate student at Kookmin University and an undergraduate researcher at [EdgeAI Lab](https://sites.google.com/view/djhan930/home) (Yonsei University), advised by Prof. Dongjun Han.
+I am a senior undergraduate student at Kookmin University.
 
 My research interests lie in **AI theory and machine interpretability**, with a current focus on mitigating feature overlap in sparse autoencoders (SAEs).
 
