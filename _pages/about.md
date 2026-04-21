@@ -37,6 +37,6 @@ announcements:
 
 I am a senior undergraduate student at Kookmin University.
 
-My research interests lie in **AI theory and machine interpretability**, with a current focus on mitigating feature overlap in sparse autoencoders (SAEs).
+My research interests lie in **AI safety and machine interpretability**, with a current focus on mitigating feature overlap in sparse autoencoders (SAEs).
 
-Previously, I worked as an undergraduate researcher at [EffL Lab](https://effl.postech.ac.kr/) (POSTECH), advised by Prof. Jaeho Lee, and as a visiting student researcher at the [Dutt Research Group](https://duttgroup.ics.uci.edu/) (University of California, Irvine) under the supervision of Prof. Nikil Dutt. I was also affiliated with [EAIC Lab](https://eaic.kr/) (Kookmin University) under the supervision of Prof. Eunji Kwon.
+Previously, I was an intern at EdgeAI (Yonsei University), advised by Prof. Dongjun Han; an undergraduate intern at EffL Lab (POSTECH), advised by Prof. Jaeho Lee; and a visiting student researcher at the Dutt Research Group (University of California, Irvine), supervised by Prof. Nikil Dutt. I was also affiliated with EAIC Lab (Kookmin University) under the supervision of Prof. Eunji Kwon.
