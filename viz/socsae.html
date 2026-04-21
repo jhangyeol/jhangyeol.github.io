@@ -264,8 +264,17 @@
               <div class="row"><span class="label">Optimization Step</span><span class="value" id="stepVal">0 / 1000</span></div>
               <input id="step" type="range" min="0" max="1000" value="0" />
               <div class="row" style="margin-top: 0.45rem; justify-content: flex-start; gap: 0.5rem">
-                <button id="simulateBtn" type="button" class="theme-btn" style="position: static; top: auto; right: auto; z-index: auto">Simulation</button>
-                <button id="goToZeroBtn" type="button" class="theme-btn" style="position: static; top: auto; right: auto; z-index: auto; display: none">Go To 0</button>
+                <button id="simulateBtn" type="button" class="theme-btn" style="position: static; top: auto; right: auto; z-index: auto">
+                  Simulation
+                </button>
+                <button
+                  id="goToZeroBtn"
+                  type="button"
+                  class="theme-btn"
+                  style="position: static; top: auto; right: auto; z-index: auto; display: none"
+                >
+                  Go To 0
+                </button>
               </div>
             </div>
 
@@ -298,11 +307,26 @@
             <div class="section">
               <div class="title">Metrics</div>
               <div class="metrics">
-                <div class="metric"><div class="k">Batch (2n)</div><div class="v" id="batchM">12</div></div>
-                <div class="metric"><div class="k">Feature Dim</div><div class="v" id="featM">24</div></div>
-                <div class="metric"><div class="k">MSE Loss</div><div class="v" id="mseM">0.0000</div></div>
-                <div class="metric"><div class="k">SupCon Loss</div><div class="v" id="supM">0.0000</div></div>
-                <div class="metric"><div class="k">Cluster Rate</div><div class="v" id="clusterM">0.0%</div></div>
+                <div class="metric">
+                  <div class="k">Batch (2n)</div>
+                  <div class="v" id="batchM">12</div>
+                </div>
+                <div class="metric">
+                  <div class="k">Feature Dim</div>
+                  <div class="v" id="featM">24</div>
+                </div>
+                <div class="metric">
+                  <div class="k">MSE Loss</div>
+                  <div class="v" id="mseM">0.0000</div>
+                </div>
+                <div class="metric">
+                  <div class="k">SupCon Loss</div>
+                  <div class="v" id="supM">0.0000</div>
+                </div>
+                <div class="metric">
+                  <div class="k">Cluster Rate</div>
+                  <div class="v" id="clusterM">0.0%</div>
+                </div>
               </div>
             </div>
           </div>
@@ -544,8 +568,7 @@
         const dimPressure = (state.n * state.topk) / Math.max(1, state.featureDim);
         const densePenalty = clamp((dimPressure - 0.8) / 1.0, 0, 1); // 0: roomy, 1: dense
         const disjointCap = Math.max(1, Math.floor(state.featureDim / Math.max(1, state.n)));
-        const baseTarget =
-          method === "both" ? state.topk : method === "supcon" || method === "gelu" ? state.topk + 1 : state.topk + 2;
+        const baseTarget = method === "both" ? state.topk : method === "supcon" || method === "gelu" ? state.topk + 1 : state.topk + 2;
         const adjustedTarget = Math.max(2, Math.round(baseTarget * (1 - 0.35 * densePenalty)));
         const targetCount = Math.min(state.featureDim, method === "both" ? Math.min(disjointCap, adjustedTarget) : adjustedTarget);
         let classTargets;
@@ -609,10 +632,10 @@
           method === "both"
             ? { own: 2.15, shared: 0.0, cross: 0.0, leak: 0.0 }
             : method === "gelu"
-            ? { own: 1.6, shared: 0.05, cross: 0.04, leak: 0.008 }
-            : method === "supcon"
-            ? { own: 1.55, shared: 0.07, cross: 0.06, leak: 0.01 }
-            : noneFinal;
+              ? { own: 1.6, shared: 0.05, cross: 0.04, leak: 0.008 }
+              : method === "supcon"
+                ? { own: 1.55, shared: 0.07, cross: 0.06, leak: 0.01 }
+                : noneFinal;
         const finalCfg = {
           own: noneFinal.own * (1 - methodWarmup) + targetFinal.own * methodWarmup,
           shared: noneFinal.shared * (1 - methodWarmup) + targetFinal.shared * methodWarmup,
@@ -625,8 +648,8 @@
           method === "both"
             ? { own: 0.72, shared: 0.56, cross: 0.34, leak: 0.12 }
             : method === "gelu" || method === "supcon"
-            ? { own: 0.68, shared: 0.68, cross: 0.44, leak: 0.16 }
-            : noneStart;
+              ? { own: 0.68, shared: 0.68, cross: 0.44, leak: 0.16 }
+              : noneStart;
         const startCfg = {
           own: noneStart.own * (1 - methodWarmup) + targetStart.own * methodWarmup,
           shared: noneStart.shared * (1 - methodWarmup) + targetStart.shared * methodWarmup,
@@ -783,8 +806,8 @@
             supconData && geluData
               ? { pull: 0.45 + 0.5 * p, jitter: 0.12 * (1 - p) + 0.02, mix: 0.02 }
               : supconData || geluData
-              ? { pull: 0.26 + 0.38 * p, jitter: 0.18 * (1 - p) + 0.04, mix: 0.08 }
-              : base;
+                ? { pull: 0.26 + 0.38 * p, jitter: 0.18 * (1 - p) + 0.04, mix: 0.08 }
+                : base;
           pull = base.pull * (1 - methodWarmup) + target.pull * methodWarmup;
           jitter = base.jitter * (1 - methodWarmup) + target.jitter * methodWarmup;
           mix = base.mix * (1 - methodWarmup) + target.mix * methodWarmup;
@@ -1070,7 +1093,9 @@
         mctx.fillStyle = css.getPropertyValue("--muted").trim();
         mctx.font = "12px 'Avenir Next', 'Segoe UI', sans-serif";
         mctx.fillText(
-          `step ${state.step}/1000  |  Cluster Rate ${(state.clusterRate * 100).toFixed(1)}%  |  MSE ${state.mse.toFixed(4)}${state.supcon ? `  |  SupCon ${state.supLoss.toFixed(4)}` : ""}`,
+          `step ${state.step}/1000  |  Cluster Rate ${(state.clusterRate * 100).toFixed(1)}%  |  MSE ${state.mse.toFixed(4)}${
+            state.supcon ? `  |  SupCon ${state.supLoss.toFixed(4)}` : ""
+          }`,
           14,
           h - 10
         );
