@@ -1,0 +1,1296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SoCSAE Training Visualization</title>
+    <style>
+      :root {
+        --bg: #f4f7ff;
+        --bg-soft: #eaf0ff;
+        --ink: #14203a;
+        --muted: #506080;
+        --line: rgba(70, 96, 160, 0.22);
+        --panel: rgba(230, 239, 255, 0.72);
+        --accent: #3659c9;
+      }
+
+      body[data-theme="night"] {
+        --bg: #020625;
+        --bg-soft: #060b34;
+        --ink: #e2e8f0;
+        --muted: #9fb0d9;
+        --line: rgba(92, 116, 192, 0.35);
+        --panel: rgba(9, 16, 62, 0.9);
+        --accent: #8fb3ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at 20% 10%, var(--bg-soft), var(--bg));
+        color: var(--ink);
+        font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+        overflow: hidden;
+      }
+
+      .app {
+        width: 100%;
+        height: 100dvh;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      .head {
+        padding: 0.7rem 0.9rem;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.2rem;
+        letter-spacing: 0.02em;
+        color: var(--accent);
+      }
+
+      .sub {
+        margin-top: 0.2rem;
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
+      .stage {
+        min-height: 0;
+        min-width: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 2.15fr) minmax(360px, 1fr);
+      }
+
+      .left {
+        min-width: 0;
+        min-height: 0;
+      }
+
+      #mainCanvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border-right: 1px solid var(--line);
+      }
+
+      .right {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: color-mix(in srgb, var(--bg) 86%, transparent);
+        overflow-y: auto;
+      }
+
+      .panel {
+        flex: 0 0 auto;
+        padding: 0.75rem;
+        overflow: visible;
+        border-bottom: 1px solid var(--line);
+        min-height: 0;
+      }
+
+      .section {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        padding: 0.6rem;
+        margin-bottom: 0.65rem;
+      }
+
+      .title {
+        margin: 0 0 0.45rem;
+        color: var(--accent);
+        font-size: 0.78rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.6rem;
+        align-items: center;
+        margin-bottom: 0.3rem;
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 0.8rem;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .value {
+        font-size: 0.8rem;
+        font-weight: 650;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+
+      .toggles {
+        display: flex;
+        gap: 0.8rem;
+        flex-wrap: wrap;
+      }
+
+      .toggle {
+        display: flex;
+        gap: 0.35rem;
+        align-items: center;
+        color: var(--ink);
+        font-size: 0.87rem;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.42rem;
+      }
+
+      .metric {
+        border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--panel) 78%, transparent);
+        padding: 0.38rem 0.45rem;
+      }
+
+      .metric .k {
+        font-size: 0.58rem;
+        color: var(--muted);
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      .metric .v {
+        margin-top: 0.1rem;
+        font-size: 0.78rem;
+        font-weight: 650;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .canvas-wrap {
+        flex: 0 0 280px;
+        height: 280px;
+        min-height: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .sphere-wrap {
+        flex: 0 0 280px;
+        height: 280px;
+        min-height: 280px;
+      }
+
+      #heatmapCanvas,
+      #sphereCanvas {
+        width: 100%;
+        height: 100%;
+        min-height: 280px;
+        display: block;
+      }
+
+      #heatmapCanvas {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .theme-btn {
+        border: 1px solid var(--line);
+        background: color-mix(in srgb, var(--panel) 86%, transparent);
+        color: var(--ink);
+        border-radius: 999px;
+        padding: 0.42rem 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        position: fixed;
+        right: 14px;
+        top: 12px;
+        z-index: 40;
+        backdrop-filter: blur(4px);
+      }
+
+      @media (max-width: 1240px) {
+        .stage {
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(0, 1fr) 620px;
+        }
+
+        #mainCanvas {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="night">
+    <button id="themeToggle" type="button" class="theme-btn">Day</button>
+    <div class="app">
+      <header class="head">
+        <h1>SoCSAE Training Visualization</h1>
+        <div class="sub">Top-k sparse features and label-level overlap tracking</div>
+      </header>
+
+      <section class="stage">
+        <section class="left">
+          <canvas id="mainCanvas" aria-label="SoCSAE pipeline"></canvas>
+        </section>
+
+        <aside class="right">
+          <div class="panel">
+            <div class="section">
+              <div class="title">Optimization</div>
+              <div class="row"><span class="label">Optimization Step</span><span class="value" id="stepVal">0 / 1000</span></div>
+              <input id="step" type="range" min="0" max="1000" value="0" />
+              <div class="row" style="margin-top: 0.45rem; justify-content: flex-start; gap: 0.5rem">
+                <button id="simulateBtn" type="button" class="theme-btn" style="position: static; top: auto; right: auto; z-index: auto">Simulation</button>
+                <button id="goToZeroBtn" type="button" class="theme-btn" style="position: static; top: auto; right: auto; z-index: auto; display: none">Go To 0</button>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="title">Data Shape</div>
+              <div class="row"><span class="label">Concepts (n)</span><span class="value" id="nVal">6</span></div>
+              <input id="n" type="range" min="6" max="20" value="6" />
+
+              <div class="row"><span class="label">Input Dim</span><span class="value" id="inDimVal">8</span></div>
+              <input id="inDim" type="range" min="8" max="24" value="8" />
+
+              <div class="row"><span class="label">Expansion Term</span><span class="value" id="expVal">5</span></div>
+              <input id="exp" type="range" min="5" max="16" value="5" />
+
+              <div class="row"><span class="label">Top-k</span><span class="value" id="topkVal">6</span></div>
+              <input id="topk" type="range" min="6" max="6" value="6" />
+
+              <div class="row"><span class="label">Points / Label</span><span class="value" id="ptsVal">10</span></div>
+              <input id="pts" type="range" min="10" max="20" value="10" />
+            </div>
+
+            <div class="section">
+              <div class="title">SoCSAE Methods</div>
+              <div class="toggles">
+                <label class="toggle"><input id="supcon" type="checkbox" /> SupCon</label>
+                <label class="toggle"><input id="gelu" type="checkbox" /> GeLU extra layer</label>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="title">Metrics</div>
+              <div class="metrics">
+                <div class="metric"><div class="k">Batch (2n)</div><div class="v" id="batchM">12</div></div>
+                <div class="metric"><div class="k">Feature Dim</div><div class="v" id="featM">24</div></div>
+                <div class="metric"><div class="k">MSE Loss</div><div class="v" id="mseM">0.0000</div></div>
+                <div class="metric"><div class="k">SupCon Loss</div><div class="v" id="supM">0.0000</div></div>
+                <div class="metric"><div class="k">Cluster Rate</div><div class="v" id="clusterM">0.0%</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="canvas-wrap">
+            <canvas id="heatmapCanvas" aria-label="TopK overlap heatmap"></canvas>
+          </div>
+
+          <div class="canvas-wrap sphere-wrap">
+            <canvas id="sphereCanvas" aria-label="L2-normalized latent hypersphere"></canvas>
+          </div>
+        </aside>
+      </section>
+    </div>
+
+    <script>
+      const mainCanvas = document.getElementById("mainCanvas");
+      const heatmapCanvas = document.getElementById("heatmapCanvas");
+      const sphereCanvas = document.getElementById("sphereCanvas");
+      const mctx = mainCanvas.getContext("2d");
+      const hctx = heatmapCanvas.getContext("2d");
+      const sctx = sphereCanvas.getContext("2d");
+
+      const controls = {
+        step: document.getElementById("step"),
+        n: document.getElementById("n"),
+        inDim: document.getElementById("inDim"),
+        exp: document.getElementById("exp"),
+        topk: document.getElementById("topk"),
+        pts: document.getElementById("pts"),
+        supcon: document.getElementById("supcon"),
+        gelu: document.getElementById("gelu"),
+      };
+
+      const out = {
+        stepVal: document.getElementById("stepVal"),
+        nVal: document.getElementById("nVal"),
+        inDimVal: document.getElementById("inDimVal"),
+        expVal: document.getElementById("expVal"),
+        topkVal: document.getElementById("topkVal"),
+        ptsVal: document.getElementById("ptsVal"),
+        batchM: document.getElementById("batchM"),
+        featM: document.getElementById("featM"),
+        mseM: document.getElementById("mseM"),
+        supM: document.getElementById("supM"),
+        clusterM: document.getElementById("clusterM"),
+      };
+
+      const themeToggle = document.getElementById("themeToggle");
+      const simulateBtn = document.getElementById("simulateBtn");
+      const goToZeroBtn = document.getElementById("goToZeroBtn");
+
+      const colors = ["#34d4ff", "#22c55e", "#facc15", "#fb7185", "#a78bfa", "#f97316", "#14b8a6", "#60a5fa"];
+      const sessionSeed = Math.floor(Math.random() * 1_000_000_000);
+
+      const state = {
+        step: 0,
+        n: 6,
+        batch: 12,
+        inputDim: 8,
+        expansion: 5,
+        featureDim: 40,
+        topk: 6,
+        points: 10,
+        supcon: false,
+        gelu: false,
+        inputRows: [],
+        featRows: [],
+        topkRows: [],
+        reconRows: [],
+        mse: 0,
+        supLoss: 0,
+        clusterRate: 0,
+        overlapMatrix: [],
+        maxOverlap: 1,
+        spherePoints: [],
+        centroids: [],
+        simulating: false,
+        finished: false,
+      };
+
+      function seededRandom(seed) {
+        let x = seed | 0;
+        return function () {
+          x ^= x << 13;
+          x ^= x >>> 17;
+          x ^= x << 5;
+          return (x >>> 0) / 4294967296;
+        };
+      }
+
+      function randn(rng) {
+        let u = 0;
+        let v = 0;
+        while (u === 0) u = rng();
+        while (v === 0) v = rng();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+      }
+
+      function clamp(v, lo, hi) {
+        return Math.max(lo, Math.min(hi, v));
+      }
+
+      function smoothstep01(t) {
+        const x = clamp(t, 0, 1);
+        return x * x * (3 - 2 * x);
+      }
+
+      function shuffledIndices(n, rng) {
+        const arr = Array.from({ length: n }, (_, i) => i);
+        for (let i = n - 1; i > 0; i--) {
+          const j = Math.floor(rng() * (i + 1));
+          const tmp = arr[i];
+          arr[i] = arr[j];
+          arr[j] = tmp;
+        }
+        return arr;
+      }
+
+      function buildClassTargets(numClasses, featureDim, targetCount, rng) {
+        const order = shuffledIndices(featureDim, rng);
+        let ptr = 0;
+        const targets = [];
+        for (let c = 0; c < numClasses; c++) {
+          const set = new Set();
+          while (set.size < targetCount) {
+            let idx;
+            if (ptr < order.length) {
+              idx = order[ptr++];
+            } else {
+              idx = order[Math.floor(rng() * order.length)];
+            }
+            set.add(idx);
+          }
+          targets.push(Array.from(set));
+        }
+        return targets;
+      }
+
+      function pickKFrom(pool, k, rng) {
+        const order = shuffledIndices(pool.length, rng);
+        const out = [];
+        for (let i = 0; i < k; i++) out.push(pool[order[i % pool.length]]);
+        return out;
+      }
+
+      function gaussianBump(i, center, width) {
+        const d = i - center;
+        return Math.exp(-(d * d) / (2 * width * width));
+      }
+
+      function normalize3(v) {
+        const n = Math.hypot(v[0], v[1], v[2]) || 1;
+        return [v[0] / n, v[1] / n, v[2] / n];
+      }
+
+      function dot(a, b) {
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      }
+
+      function hexToRgba(hex, a) {
+        const v = hex.replace("#", "");
+        const n = parseInt(v, 16);
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+      }
+
+      function resizeCanvas(canvas, ctx) {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
+      function gelu(x) {
+        return 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * x * x * x)));
+      }
+
+      function themeInk() {
+        return getComputedStyle(document.body).getPropertyValue("--ink").trim();
+      }
+
+      function themeMuted() {
+        return getComputedStyle(document.body).getPropertyValue("--muted").trim();
+      }
+
+      function recompute() {
+        state.step = Number(controls.step.value);
+        if (!state.simulating && state.step < 1000 && state.finished) {
+          state.finished = false;
+          simulateBtn.textContent = "Simulation";
+        }
+        state.n = Number(controls.n.value);
+        state.inputDim = Number(controls.inDim.value);
+        state.expansion = Number(controls.exp.value);
+        state.points = Number(controls.pts.value);
+        state.supcon = controls.supcon.checked;
+        state.gelu = controls.gelu.checked;
+        const isInit = state.step === 0;
+        const supconData = isInit ? false : state.supcon;
+        const geluData = isInit ? false : state.gelu;
+        const methodWarmup = smoothstep01(state.step / 140);
+
+        state.batch = state.n * 2;
+        state.featureDim = state.inputDim * state.expansion;
+
+        controls.topk.min = "6";
+        controls.topk.max = "6";
+        controls.topk.value = "6";
+        state.topk = 6;
+
+        // Keep structure fixed across step; only noise evolves with step.
+        const structRng = seededRandom(sessionSeed + 1111 + state.n * 97 + state.inputDim * 11 + state.expansion * 7);
+        const rng = seededRandom(sessionSeed + 7777 + state.step * 29 + state.n * 101 + state.inputDim * 17 + state.expansion * 13);
+
+        const centers = Array.from({ length: state.n }, () => Array.from({ length: state.inputDim }, () => randn(structRng) * 0.95));
+
+        const p = smoothstep01(state.step / 1000);
+        const noise = 0.92 - 0.84 * p;
+
+        state.inputRows = [];
+        for (let c = 0; c < state.n; c++) {
+          const a = centers[c].map((v) => v + randn(rng) * noise);
+          const b = centers[c].map((v) => v + randn(rng) * noise);
+          state.inputRows.push({ cls: c, pair: c, vec: a });
+          state.inputRows.push({ cls: c, pair: c, vec: b });
+        }
+
+        const enc = Array.from({ length: state.featureDim }, () => Array.from({ length: state.inputDim }, () => randn(structRng) * 0.42));
+
+        const extra = Array.from({ length: state.featureDim }, () => Array.from({ length: state.featureDim }, () => randn(structRng) * 0.12));
+
+        const dec = Array.from({ length: state.inputDim }, () => Array.from({ length: state.featureDim }, () => randn(structRng) * 0.33));
+
+        // Method order (overlap high -> low): none > supcon > gelu > both.
+        const method = supconData && geluData ? "both" : geluData ? "gelu" : supconData ? "supcon" : "none";
+        // Dimension-pressure aware target sizing:
+        // when featureDim is relatively small, shrink per-class targets/shared overlap to avoid excessive collisions.
+        const dimPressure = (state.n * state.topk) / Math.max(1, state.featureDim);
+        const densePenalty = clamp((dimPressure - 0.8) / 1.0, 0, 1); // 0: roomy, 1: dense
+        const disjointCap = Math.max(1, Math.floor(state.featureDim / Math.max(1, state.n)));
+        const baseTarget =
+          method === "both" ? state.topk : method === "supcon" || method === "gelu" ? state.topk + 1 : state.topk + 2;
+        const adjustedTarget = Math.max(2, Math.round(baseTarget * (1 - 0.35 * densePenalty)));
+        const targetCount = Math.min(state.featureDim, method === "both" ? Math.min(disjointCap, adjustedTarget) : adjustedTarget);
+        let classTargets;
+        if (method === "both") {
+          // Near-disjoint targets for minimal overlap.
+          classTargets = buildClassTargets(state.n, state.featureDim, targetCount, structRng);
+        } else {
+          // Shared target pools to induce controlled overlap in data itself.
+          const allIdx = Array.from({ length: state.featureDim }, (_, i) => i);
+          const singlePoolFrac = 0.33 - 0.13 * densePenalty;
+          const nonePoolFrac = 0.15 - 0.07 * densePenalty;
+          const poolSize =
+            method === "supcon" || method === "gelu"
+              ? Math.max(targetCount + 2, Math.floor(state.featureDim * singlePoolFrac))
+              : Math.max(targetCount + 1, Math.floor(state.featureDim * nonePoolFrac));
+          const sharedPool = pickKFrom(allIdx, Math.min(state.featureDim, poolSize), structRng);
+          const uniquePool = shuffledIndices(state.featureDim, structRng);
+          let up = 0;
+          classTargets = Array.from({ length: state.n }, () => {
+            const set = new Set();
+            const singleSharedFrac = 0.35 - 0.15 * densePenalty;
+            const noneSharedFrac = 0.9 - 0.4 * densePenalty;
+            const sharedCount =
+              method === "supcon" || method === "gelu"
+                ? Math.max(1, Math.floor(targetCount * singleSharedFrac))
+                : Math.max(1, Math.floor(targetCount * noneSharedFrac));
+            const uniqueCount = Math.max(0, targetCount - sharedCount);
+            const sharedPicked = pickKFrom(sharedPool, sharedCount, structRng);
+            for (const v of sharedPicked) set.add(v);
+            while (set.size < sharedCount + uniqueCount) {
+              set.add(uniquePool[up % uniquePool.length]);
+              up++;
+            }
+            return Array.from(set).slice(0, targetCount);
+          });
+        }
+
+        // Class-specific templates distributed over full feature dimension.
+        const classTemplate = Array.from({ length: state.n }, (_, c) => {
+          const arr = Array.from({ length: state.featureDim }, () => 0.08 + structRng() * 0.05);
+          for (const t of classTargets[c]) {
+            const width = 1.0 + structRng() * 1.4;
+            const amp = 0.8 + structRng() * 0.6;
+            for (let i = 0; i < state.featureDim; i++) {
+              arr[i] += amp * gaussianBump(i, t, width);
+            }
+          }
+          return arr;
+        });
+
+        const meanTemplate = Array.from({ length: state.featureDim }, (_, i) => {
+          let s = 0;
+          for (let c = 0; c < state.n; c++) s += classTemplate[c][i];
+          return s / Math.max(1, state.n);
+        });
+
+        const sharedProto = Array.from({ length: state.featureDim }, () => 0.32 + Math.abs(randn(structRng)) * 0.22);
+
+        const noneFinal = { own: 1.0, shared: 0.28, cross: 0.3, leak: 0.06 };
+        const targetFinal =
+          method === "both"
+            ? { own: 2.15, shared: 0.0, cross: 0.0, leak: 0.0 }
+            : method === "gelu"
+            ? { own: 1.6, shared: 0.05, cross: 0.04, leak: 0.008 }
+            : method === "supcon"
+            ? { own: 1.55, shared: 0.07, cross: 0.06, leak: 0.01 }
+            : noneFinal;
+        const finalCfg = {
+          own: noneFinal.own * (1 - methodWarmup) + targetFinal.own * methodWarmup,
+          shared: noneFinal.shared * (1 - methodWarmup) + targetFinal.shared * methodWarmup,
+          cross: noneFinal.cross * (1 - methodWarmup) + targetFinal.cross * methodWarmup,
+          leak: noneFinal.leak * (1 - methodWarmup) + targetFinal.leak * methodWarmup,
+        };
+
+        const noneStart = { own: 0.62, shared: 0.9, cross: 0.58, leak: 0.24 };
+        const targetStart =
+          method === "both"
+            ? { own: 0.72, shared: 0.56, cross: 0.34, leak: 0.12 }
+            : method === "gelu" || method === "supcon"
+            ? { own: 0.68, shared: 0.68, cross: 0.44, leak: 0.16 }
+            : noneStart;
+        const startCfg = {
+          own: noneStart.own * (1 - methodWarmup) + targetStart.own * methodWarmup,
+          shared: noneStart.shared * (1 - methodWarmup) + targetStart.shared * methodWarmup,
+          cross: noneStart.cross * (1 - methodWarmup) + targetStart.cross * methodWarmup,
+          leak: noneStart.leak * (1 - methodWarmup) + targetStart.leak * methodWarmup,
+        };
+        const cfg = {
+          own: startCfg.own * (1 - p) + finalCfg.own * p,
+          shared: startCfg.shared * (1 - p) + finalCfg.shared * p,
+          cross: startCfg.cross * (1 - p) + finalCfg.cross * p,
+          leak: startCfg.leak * (1 - p) + finalCfg.leak * p,
+        };
+
+        // Additional anti-overlap scaling in dense regimes.
+        cfg.shared *= 1 - 0.35 * densePenalty;
+        cfg.cross *= 1 - 0.45 * densePenalty;
+        cfg.leak *= 1 - 0.5 * densePenalty;
+
+        // Feature activation dispersion by method:
+        // off: medium, single-on: lower, both-on: very low.
+        const dispersionTarget = method === "both" ? 0.22 : method === "gelu" || method === "supcon" ? 0.45 : 0.65;
+        const dispersionScale = 0.65 * (1 - methodWarmup) + dispersionTarget * methodWarmup;
+
+        const concentrationTarget = method === "both" ? 1.0 : method === "gelu" || method === "supcon" ? 0.65 : 0.35;
+        const concentrationStrength = 0.35 * (1 - methodWarmup) + concentrationTarget * methodWarmup;
+        const concentration = concentrationStrength * p;
+
+        state.featRows = state.inputRows.map((row) => {
+          const targetSet = new Set(classTargets[row.cls]);
+          const z = Array.from({ length: state.featureDim }, (_, i) => {
+            let s = 0;
+            for (let j = 0; j < state.inputDim; j++) s += enc[i][j] * row.vec[j];
+            const own = classTemplate[row.cls][i] * cfg.own;
+            const cross = (meanTemplate[i] - classTemplate[row.cls][i] * (1 / Math.max(1, state.n))) * cfg.cross;
+            const shared = sharedProto[i] * cfg.shared;
+            const leak = cfg.leak * (0.6 + (structRng() - 0.5) * 0.5 * dispersionScale);
+            const nse = randn(rng) * ((0.12 * (1 - p) + 0.02) * dispersionScale);
+            return Math.max(0.015, own + cross + shared + leak + s * 0.03 + nse);
+          });
+
+          // As optimization proceeds, target indices dominate more strongly.
+          for (let i = 0; i < z.length; i++) {
+            if (targetSet.has(i)) {
+              z[i] *= 1 + concentration * 2.5;
+            } else {
+              z[i] *= 1 - concentration * 0.62;
+            }
+            z[i] = Math.max(0.002, z[i]);
+          }
+
+          const gamma = 1 + concentration * 2.1;
+          for (let i = 0; i < z.length; i++) z[i] = Math.pow(z[i], gamma);
+
+          if (geluData) {
+            const gz = Array.from({ length: state.featureDim }, (_, i) => {
+              let s = 0;
+              for (let j = 0; j < state.featureDim; j++) s += extra[i][j] * z[j];
+              return gelu(s * 0.5 + z[i] * 0.56);
+            });
+            return gz.map((v, i) => Math.max(0, z[i] * (1 - methodWarmup) + v * methodWarmup));
+          }
+          return z;
+        });
+
+        state.topkRows = state.featRows.map((row) => {
+          const idx = row
+            .map((v, i) => ({ v, i }))
+            .sort((a, b) => b.v - a.v)
+            .slice(0, state.topk)
+            .map((x) => x.i);
+          const keep = new Set(idx);
+          return row.map((v, i) => (keep.has(i) ? v : 0));
+        });
+
+        state.reconRows = state.topkRows.map((z, r) => {
+          const outv = Array.from({ length: state.inputDim }, (_, i) => {
+            let s = 0;
+            for (let j = 0; j < state.featureDim; j++) s += dec[i][j] * z[j];
+            return s;
+          });
+          return { cls: state.inputRows[r].cls, pair: state.inputRows[r].pair, vec: outv };
+        });
+
+        // Metrics should be driven by mock-generated data only.
+        // Define MSE from discarded feature energy so Top-k increase => MSE decrease.
+        let totalE = 0;
+        let keptE = 0;
+        for (let r = 0; r < state.featRows.length; r++) {
+          for (let c = 0; c < state.featureDim; c++) {
+            const v = state.featRows[r][c];
+            totalE += v * v;
+            const kv = state.topkRows[r][c];
+            keptE += kv * kv;
+          }
+        }
+        const retained = totalE > 0 ? keptE / totalE : 0;
+        state.mse = clamp((1 - retained) * (1.1 - 0.65 * p) + 0.015, 0, 999);
+        state.supLoss = supconData ? computeMockSupConLoss(p) * methodWarmup : 0;
+
+        buildSphere(rng, supconData, geluData, methodWarmup);
+        buildTopkOverlap();
+        syncUI();
+      }
+
+      function computeMockSupConLoss(progress) {
+        if (!state.supcon || state.batch < 2) return 0;
+        const emb = state.featRows.map((row) => {
+          const n = Math.sqrt(row.reduce((s, v) => s + v * v, 0)) || 1;
+          return row.map((v) => v / n);
+        });
+
+        const tau = 0.28 - 0.12 * progress;
+        let sumLoss = 0;
+        let anchors = 0;
+        for (let i = 0; i < state.batch; i++) {
+          let pos = -1;
+          for (let j = 0; j < state.batch; j++) {
+            if (i !== j && state.inputRows[i].pair === state.inputRows[j].pair) {
+              pos = j;
+              break;
+            }
+          }
+          if (pos < 0) continue;
+
+          let den = 0;
+          for (let j = 0; j < state.batch; j++) {
+            const sim = emb[i].reduce((s, v, k) => s + v * emb[j][k], 0);
+            if (j !== i) den += Math.exp(sim / tau);
+          }
+          const posSim = emb[i].reduce((s, v, k) => s + v * emb[pos][k], 0);
+          const num = Math.exp(posSim / tau);
+          sumLoss += -Math.log((num + 1e-12) / (den + 1e-12));
+          anchors++;
+        }
+        return anchors ? sumLoss / anchors : 0;
+      }
+
+      function buildSphere(rng, supconData, geluData, methodWarmup) {
+        const centers = Array.from({ length: state.n }, () => normalize3([randn(rng), randn(rng), randn(rng)]));
+        state.centroids = centers;
+
+        const p = smoothstep01(state.step / 1000);
+        let pull;
+        let jitter;
+        let mix;
+
+        if (state.step === 0) {
+          pull = 0.18;
+          jitter = 0.28;
+          mix = 0.18;
+        } else {
+          const base = { pull: 0.2 + 0.28 * p, jitter: 0.24 * (1 - p * 0.7) + 0.06, mix: 0.16 };
+          const target =
+            supconData && geluData
+              ? { pull: 0.45 + 0.5 * p, jitter: 0.12 * (1 - p) + 0.02, mix: 0.02 }
+              : supconData || geluData
+              ? { pull: 0.26 + 0.38 * p, jitter: 0.18 * (1 - p) + 0.04, mix: 0.08 }
+              : base;
+          pull = base.pull * (1 - methodWarmup) + target.pull * methodWarmup;
+          jitter = base.jitter * (1 - methodWarmup) + target.jitter * methodWarmup;
+          mix = base.mix * (1 - methodWarmup) + target.mix * methodWarmup;
+        }
+
+        const points = [];
+        for (let cls = 0; cls < state.n; cls++) {
+          for (let i = 0; i < state.points; i++) {
+            const base = normalize3([randn(rng), randn(rng), randn(rng)]);
+            let target = cls;
+            if (rng() < mix) target = Math.floor(rng() * state.n);
+            const c = centers[target];
+            const p3 = normalize3([
+              base[0] * (1 - pull) + c[0] * pull + randn(rng) * jitter,
+              base[1] * (1 - pull) + c[1] * pull + randn(rng) * jitter,
+              base[2] * (1 - pull) + c[2] * pull + randn(rng) * jitter,
+            ]);
+            points.push({ cls, p: p3 });
+          }
+        }
+        state.spherePoints = points;
+
+        let correct = 0;
+        for (const pt of points) {
+          let best = -1;
+          let bestC = -1;
+          for (let c = 0; c < centers.length; c++) {
+            const cs = dot(pt.p, centers[c]);
+            if (cs > bestC) {
+              bestC = cs;
+              best = c;
+            }
+          }
+          if (best === pt.cls) correct++;
+        }
+        state.clusterRate = points.length ? correct / points.length : 0;
+      }
+
+      function buildTopkOverlap() {
+        const labelUnions = Array.from({ length: state.n }, () => new Set());
+
+        for (let r = 0; r < state.topkRows.length; r++) {
+          const cls = state.inputRows[r].cls;
+          const row = state.topkRows[r];
+          for (let i = 0; i < row.length; i++) {
+            if (row[i] > 0) labelUnions[cls].add(i);
+          }
+        }
+
+        const matrix = Array.from({ length: state.n }, () => Array.from({ length: state.n }, () => 0));
+        let maxVal = 1;
+
+        for (let i = 0; i < state.n; i++) {
+          for (let j = 0; j < state.n; j++) {
+            if (i === j) {
+              matrix[i][j] = 0;
+              continue;
+            }
+
+            let overlap = 0;
+            for (const idx of labelUnions[i]) {
+              if (labelUnions[j].has(idx)) overlap++;
+            }
+            matrix[i][j] = overlap;
+            maxVal = Math.max(maxVal, overlap);
+          }
+        }
+
+        // Requirement: when both methods are on, TopK overlap should be zero.
+        if (state.supcon && state.gelu) {
+          for (let i = 0; i < state.n; i++) {
+            for (let j = 0; j < state.n; j++) {
+              if (i !== j) matrix[i][j] = 0;
+            }
+          }
+          maxVal = 1;
+        }
+
+        state.overlapMatrix = matrix;
+        state.maxOverlap = maxVal;
+      }
+
+      function syncUI() {
+        out.stepVal.textContent = `${state.step} / 1000`;
+        out.nVal.textContent = String(state.n);
+        out.inDimVal.textContent = String(state.inputDim);
+        out.expVal.textContent = String(state.expansion);
+        out.topkVal.textContent = String(state.topk);
+        out.ptsVal.textContent = String(state.points);
+        out.batchM.textContent = String(state.batch);
+        out.featM.textContent = String(state.featureDim);
+        out.mseM.textContent = state.mse.toFixed(4);
+        out.supM.textContent = state.supcon ? state.supLoss.toFixed(4) : "OFF";
+        out.clusterM.textContent = `${(state.clusterRate * 100).toFixed(1)}%`;
+
+        const editableAtZero = state.step === 0 && !state.simulating;
+        controls.n.disabled = !editableAtZero;
+        controls.inDim.disabled = !editableAtZero;
+        controls.exp.disabled = !editableAtZero;
+        controls.pts.disabled = !editableAtZero;
+        controls.supcon.disabled = !editableAtZero;
+        controls.gelu.disabled = !editableAtZero;
+        goToZeroBtn.style.display = state.finished ? "inline-block" : "none";
+      }
+
+      function drawArrow(x1, y1, x2, y2) {
+        mctx.strokeStyle = "rgba(103, 132, 255, 0.75)";
+        mctx.lineWidth = 1.6;
+        mctx.beginPath();
+        mctx.moveTo(x1, y1);
+        mctx.lineTo(x2, y2);
+        mctx.stroke();
+        const a = Math.atan2(y2 - y1, x2 - x1);
+        const s = 7;
+        mctx.beginPath();
+        mctx.moveTo(x2, y2);
+        mctx.lineTo(x2 - s * Math.cos(a - 0.35), y2 - s * Math.sin(a - 0.35));
+        mctx.lineTo(x2 - s * Math.cos(a + 0.35), y2 - s * Math.sin(a + 0.35));
+        mctx.closePath();
+        mctx.fillStyle = "rgba(103, 132, 255, 0.8)";
+        mctx.fill();
+      }
+
+      function drawTrapezoidBlock(x, y, w, h, type, label, sub) {
+        const leftTop = type === "encoder" ? y + h * 0.22 : y + h * 0.1;
+        const leftBottom = type === "encoder" ? y + h * 0.78 : y + h * 0.9;
+        const rightTop = type === "encoder" ? y + h * 0.1 : y + h * 0.22;
+        const rightBottom = type === "encoder" ? y + h * 0.9 : y + h * 0.78;
+
+        mctx.beginPath();
+        mctx.moveTo(x, leftTop);
+        mctx.lineTo(x + w, rightTop);
+        mctx.lineTo(x + w, rightBottom);
+        mctx.lineTo(x, leftBottom);
+        mctx.closePath();
+        mctx.fillStyle = "rgba(76, 182, 255, 0.86)";
+        mctx.fill();
+        mctx.strokeStyle = "rgba(218, 238, 255, 0.62)";
+        mctx.lineWidth = 1.6;
+        mctx.stroke();
+        mctx.fillStyle = "rgba(255,255,255,0.16)";
+        mctx.beginPath();
+        mctx.arc(x + w * 0.28, y + h * 0.3, Math.max(3, w * 0.07), 0, Math.PI * 2);
+        mctx.arc(x + w * 0.35, y + h * 0.36, Math.max(2, w * 0.05), 0, Math.PI * 2);
+        mctx.fill();
+
+        if (type === "encoder" && state.gelu) {
+          const geluH = leftBottom - leftTop;
+          const geluW = Math.max(12, w * 0.2);
+          const geluX = x - geluW - 8;
+          const geluY = leftTop;
+          mctx.fillStyle = "rgba(248, 74, 74, 0.85)";
+          mctx.fillRect(geluX, geluY, geluW, geluH);
+          mctx.strokeStyle = "rgba(255, 200, 200, 0.55)";
+          mctx.strokeRect(geluX, geluY, geluW, geluH);
+          mctx.fillStyle = "#ffe2e2";
+          mctx.font = "700 11px 'Avenir Next', 'Segoe UI', sans-serif";
+          mctx.textAlign = "center";
+          mctx.save();
+          mctx.translate(geluX + geluW * 0.5, geluY + geluH * 0.5);
+          mctx.rotate(-Math.PI / 2);
+          mctx.fillText("GeLU", 0, 0);
+          mctx.restore();
+        }
+
+        mctx.fillStyle = themeInk();
+        mctx.textAlign = "center";
+        mctx.font = "800 18px 'Avenir Next', 'Segoe UI', sans-serif";
+        mctx.save();
+        mctx.translate(x + w * 0.52, y + h * 0.52);
+        mctx.rotate(type === "encoder" ? -Math.PI / 2 : Math.PI / 2);
+        mctx.fillText(label, 0, 0);
+        mctx.restore();
+        mctx.textAlign = "left";
+      }
+
+      function drawPairSquares(rows, x, y, w, h, title, subtitle) {
+        mctx.fillStyle = themeInk();
+        mctx.font = "600 14px 'Avenir Next', 'Segoe UI', sans-serif";
+        mctx.fillText(title, x + 2, y + 16);
+        mctx.fillStyle = themeMuted();
+        mctx.font = "12px 'Avenir Next', 'Segoe UI', sans-serif";
+        mctx.fillText(subtitle, x + 2, y + 33);
+
+        const top = y + 45;
+        const pairCount = Math.floor(rows.length / 2);
+        const rowGap = (h - 58) / Math.max(1, pairCount);
+        let sq = Math.min(18, Math.max(5, rowGap * 0.42));
+        sq = Math.min(sq, Math.max(4, rowGap - 4));
+        const pairDist = Math.max(2, Math.min(rowGap * 0.42, rowGap - sq - 2));
+
+        for (let p = 0; p < pairCount; p++) {
+          const i0 = p * 2;
+          const yMid = top + p * rowGap + rowGap * 0.5;
+          const y0 = yMid - pairDist * 0.5;
+          const y1 = yMid + pairDist * 0.5;
+
+          const cls = rows[i0].cls;
+          const col = colors[cls % colors.length];
+
+          mctx.fillStyle = col;
+          mctx.fillRect(x + 8, y0 - sq / 2, sq, sq);
+          mctx.fillRect(x + 8, y1 - sq / 2, sq, sq);
+
+          mctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
+          mctx.lineWidth = 1;
+          mctx.beginPath();
+          mctx.moveTo(x + 46, y0);
+          mctx.lineTo(x + 46, y1);
+          mctx.stroke();
+
+          mctx.fillStyle = themeInk();
+          mctx.font = "11px 'Avenir Next', 'Segoe UI', sans-serif";
+          mctx.fillText(`Concept ${cls + 1}`, x + 34, yMid - 2);
+          mctx.fillStyle = "#93c5fd";
+          mctx.fillText(`pair ${rows[i0].pair + 1}`, x + 34, yMid + 10);
+        }
+      }
+
+      function drawBars(rows, x, y, w, h, title, subtitle) {
+        mctx.fillStyle = themeInk();
+        mctx.font = "600 14px 'Avenir Next', 'Segoe UI', sans-serif";
+        mctx.fillText(title, x + 2, y + 16);
+        mctx.fillStyle = themeMuted();
+        mctx.font = "12px 'Avenir Next', 'Segoe UI', sans-serif";
+        mctx.fillText(subtitle, x + 2, y + 33);
+
+        const top = y + 42;
+        const rowH = (h - 50) / rows.length;
+        const cols = rows[0]?.length || 1;
+        const bw = w / cols;
+
+        for (let r = 0; r < rows.length; r++) {
+          const row = rows[r];
+          const maxv = Math.max(...row, 1e-6);
+          for (let c = 0; c < cols; c++) {
+            const t = row[c] / maxv;
+            const bh = (rowH - 1) * clamp(t, 0, 1);
+            const cls = state.inputRows[r].cls;
+            const col = colors[cls % colors.length];
+            mctx.fillStyle = row[c] === 0 ? "rgba(148,163,184,0.14)" : hexToRgba(col, 0.35 + t * 0.5);
+            mctx.fillRect(x + c * bw + 0.25, top + r * rowH + (rowH - 1) - bh, Math.max(0.45, bw - 0.4), bh);
+          }
+        }
+      }
+
+      function drawMain() {
+        const w = mainCanvas.clientWidth;
+        const h = mainCanvas.clientHeight;
+        mctx.clearRect(0, 0, w, h);
+
+        const css = getComputedStyle(document.body);
+        mctx.fillStyle = css.getPropertyValue("--bg").trim();
+        mctx.fillRect(0, 0, w, h);
+
+        const margins = { x: 12, y: 10 };
+        const gap = 9;
+        const fracs = [0.18, 0.07, 0.25, 0.13, 0.07, 0.2];
+        const usable = w - margins.x * 2 - gap * 5;
+        const widths = fracs.map((f) => f * usable);
+        const totalWidth = widths.reduce((s, v) => s + v, 0) + gap * (widths.length - 1);
+        let x = (w - totalWidth) * 0.5;
+        const y = margins.y;
+        const boxH = h - margins.y * 2;
+
+        const boxes = widths.map((bw) => {
+          const b = { x, y, w: bw, h: boxH };
+          x += bw + gap;
+          return b;
+        });
+
+        drawPairSquares(state.inputRows, boxes[0].x, boxes[0].y, boxes[0].w, boxes[0].h, "Input Data", `${state.batch} x ${state.inputDim}`);
+        drawTrapezoidBlock(boxes[1].x, boxes[1].y + 34, boxes[1].w, boxes[1].h - 68, "encoder", "SAE Encoder", state.gelu ? "+ GeLU" : "Linear/ReLU");
+        drawBars(state.featRows, boxes[2].x, boxes[2].y, boxes[2].w, boxes[2].h, "Feature Activations", `${state.batch} x ${state.featureDim}`);
+        drawBars(state.topkRows, boxes[3].x, boxes[3].y, boxes[3].w, boxes[3].h, "Top-k Selection", `k = ${state.topk}`);
+        drawTrapezoidBlock(boxes[4].x, boxes[4].y + 34, boxes[4].w, boxes[4].h - 68, "decoder", "SAE Decoder", "Reconstruction");
+        drawPairSquares(state.reconRows, boxes[5].x, boxes[5].y, boxes[5].w, boxes[5].h, "Output", `${state.batch} x ${state.inputDim}`);
+
+        for (let i = 0; i < boxes.length - 1; i++) {
+          drawArrow(boxes[i].x + boxes[i].w + 1, h * 0.5, boxes[i + 1].x - 1, h * 0.5);
+        }
+
+        mctx.fillStyle = css.getPropertyValue("--muted").trim();
+        mctx.font = "12px 'Avenir Next', 'Segoe UI', sans-serif";
+        mctx.fillText(
+          `step ${state.step}/1000  |  Cluster Rate ${(state.clusterRate * 100).toFixed(1)}%  |  MSE ${state.mse.toFixed(4)}${state.supcon ? `  |  SupCon ${state.supLoss.toFixed(4)}` : ""}`,
+          14,
+          h - 10
+        );
+      }
+
+      function drawHeatmap() {
+        const w = heatmapCanvas.clientWidth;
+        const h = heatmapCanvas.clientHeight;
+        hctx.clearRect(0, 0, w, h);
+
+        const css = getComputedStyle(document.body);
+        const bg = css.getPropertyValue("--bg").trim();
+        const ink = css.getPropertyValue("--ink").trim();
+        const muted = css.getPropertyValue("--muted").trim();
+
+        hctx.fillStyle = bg;
+        hctx.fillRect(0, 0, w, h);
+
+        hctx.fillStyle = ink;
+        hctx.font = "600 14px 'Avenir Next', 'Segoe UI', sans-serif";
+        hctx.textAlign = "center";
+        hctx.fillText("TopK Overlap Count", w * 0.5, 20);
+        hctx.textAlign = "left";
+
+        const left = 84;
+        const top = 42;
+        const right = 14;
+        const bottom = 72;
+        const n = state.n;
+        const gridW = Math.max(40, w - left - right);
+        const gridH = Math.max(40, h - top - bottom);
+        const cell = Math.min(gridW / n, gridH / n);
+        const gw = cell * n;
+        const gh = cell * n;
+        const gx = (w - gw) * 0.5;
+
+        for (let i = 0; i < n; i++) {
+          for (let j = 0; j < n; j++) {
+            // Show only lower triangular cells (incl. diagonal).
+            if (i < j) continue;
+
+            const v = state.overlapMatrix[i][j];
+            const t = state.maxOverlap === 0 ? 0 : v / state.maxOverlap;
+            const alpha = 0.08 + t * 0.82;
+            hctx.fillStyle = hexToRgba("#2f6fff", alpha);
+            hctx.fillRect(gx + j * cell, top + i * cell, cell - 1, cell - 1);
+
+            if (cell > 16) {
+              hctx.fillStyle = t > 0.55 ? "#f8fbff" : ink;
+              hctx.font = "11px 'Avenir Next', 'Segoe UI', sans-serif";
+              hctx.textAlign = "center";
+              hctx.fillText(String(v), gx + j * cell + cell * 0.5, top + i * cell + cell * 0.62);
+              hctx.textAlign = "left";
+            }
+          }
+        }
+
+        hctx.strokeStyle = "rgba(120, 140, 180, 0.3)";
+        hctx.strokeRect(gx, top, gw, gh);
+
+        hctx.fillStyle = muted;
+        hctx.font = "11px 'Avenir Next', 'Segoe UI', sans-serif";
+
+        for (let i = 0; i < n; i++) {
+          const tick = `concept ${i + 1}`;
+          const y = top + i * cell + cell * 0.62;
+          hctx.textAlign = "right";
+          hctx.fillText(tick, gx - 8, y);
+          hctx.textAlign = "left";
+
+          hctx.save();
+          hctx.translate(gx + i * cell + cell * 0.5, top + gh + 8);
+          hctx.rotate(-Math.PI / 3);
+          hctx.textAlign = "right";
+          hctx.fillText(tick, 0, 0);
+          hctx.restore();
+        }
+      }
+
+      function drawSphere(time) {
+        const w = sphereCanvas.clientWidth;
+        const h = sphereCanvas.clientHeight;
+        sctx.clearRect(0, 0, w, h);
+
+        const css = getComputedStyle(document.body);
+        sctx.fillStyle = css.getPropertyValue("--bg").trim();
+        sctx.fillRect(0, 0, w, h);
+
+        const cx = w * 0.5;
+        const cy = h * 0.54;
+        const R = Math.min(w, h) * 0.42;
+
+        sctx.strokeStyle = "rgba(103,132,255,0.36)";
+        sctx.lineWidth = 1.2;
+        sctx.beginPath();
+        sctx.arc(cx, cy, R, 0, Math.PI * 2);
+        sctx.stroke();
+
+        sctx.beginPath();
+        sctx.ellipse(cx, cy, R, R * 0.38, 0, 0, Math.PI * 2);
+        sctx.strokeStyle = "rgba(148,163,184,0.25)";
+        sctx.stroke();
+
+        const ay = time * 0.0011;
+        const ax = 0.6;
+        const proj = [];
+
+        for (const pt of state.spherePoints) {
+          let [x, y, z] = pt.p;
+          const x1 = x * Math.cos(ay) + z * Math.sin(ay);
+          const z1 = -x * Math.sin(ay) + z * Math.cos(ay);
+          x = x1;
+          z = z1;
+
+          const y1 = y * Math.cos(ax) - z * Math.sin(ax);
+          const z2 = y * Math.sin(ax) + z * Math.cos(ax);
+          y = y1;
+          z = z2;
+
+          proj.push({
+            cls: pt.cls,
+            x: cx + x * R,
+            y: cy + y * R,
+            z,
+            r: 2.2 * (0.72 + (0.35 * (z + 1)) / 2),
+            a: 0.25 + (0.7 * (z + 1)) / 2,
+          });
+        }
+
+        proj.sort((a, b) => a.z - b.z);
+        for (const p of proj) {
+          sctx.fillStyle = hexToRgba(colors[p.cls % colors.length], p.a);
+          sctx.beginPath();
+          sctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          sctx.fill();
+        }
+
+        sctx.fillStyle = css.getPropertyValue("--ink").trim();
+        sctx.font = "600 12px 'Avenir Next', 'Segoe UI', sans-serif";
+        sctx.fillText("L2-normalized SAE latent hypersphere", 10, 18);
+      }
+
+      function renderNow(time = performance.now()) {
+        drawMain();
+        drawHeatmap();
+        drawSphere(time);
+      }
+
+      function refreshAll() {
+        recompute();
+        renderNow();
+      }
+
+      Object.values(controls).forEach((el) => {
+        el.addEventListener(el.type === "checkbox" ? "change" : "input", refreshAll);
+      });
+
+      themeToggle.addEventListener("click", () => {
+        const night = document.body.getAttribute("data-theme") === "night";
+        document.body.setAttribute("data-theme", night ? "day" : "night");
+        themeToggle.textContent = night ? "Night" : "Day";
+        renderNow();
+      });
+
+      simulateBtn.addEventListener("click", () => {
+        if (state.finished) {
+          controls.step.value = "0";
+          state.step = 0;
+          state.finished = false;
+          state.simulating = true;
+          simulateBtn.textContent = "Stop Simulation";
+          refreshAll();
+          return;
+        }
+
+        state.simulating = !state.simulating;
+        simulateBtn.textContent = state.simulating ? "Stop Simulation" : "Simulation";
+        syncUI();
+      });
+
+      goToZeroBtn.addEventListener("click", () => {
+        state.simulating = false;
+        state.finished = false;
+        controls.step.value = "0";
+        state.step = 0;
+        simulateBtn.textContent = "Simulation";
+        refreshAll();
+      });
+
+      function onResize() {
+        resizeCanvas(mainCanvas, mctx);
+        resizeCanvas(heatmapCanvas, hctx);
+        resizeCanvas(sphereCanvas, sctx);
+        refreshAll();
+      }
+
+      window.addEventListener("resize", onResize);
+
+      function animate(t) {
+        if (state.simulating) {
+          const next = Math.min(1000, Number(controls.step.value) + 2);
+          controls.step.value = String(next);
+          refreshAll();
+          if (next >= 1000) {
+            state.simulating = false;
+            state.finished = true;
+            simulateBtn.textContent = "Re-simulation";
+            syncUI();
+          }
+        }
+        drawSphere(t);
+        requestAnimationFrame(animate);
+      }
+
+      resizeCanvas(mainCanvas, mctx);
+      resizeCanvas(heatmapCanvas, hctx);
+      resizeCanvas(sphereCanvas, sctx);
+      recompute();
+      renderNow(0);
+      requestAnimationFrame(animate);
+    </script>
+  </body>
+</html>
