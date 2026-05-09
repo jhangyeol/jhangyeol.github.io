@@ -88,33 +88,37 @@
       .right {
         min-width: 0;
         min-height: 0;
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-rows: 56% 22% 22%;
         background: color-mix(in srgb, var(--bg) 86%, transparent);
-        overflow-y: auto;
+        overflow: hidden;
       }
 
       .panel {
-        flex: 0 0 auto;
-        padding: 0.75rem;
-        overflow: visible;
+        padding: 0.45rem 0.5rem;
+        overflow: hidden;
         border-bottom: 1px solid var(--line);
         min-height: 0;
+        display: grid;
+        grid-template-rows: 0.9fr 2fr 0.62fr 0.9fr;
+        gap: 0.45rem;
       }
 
       .section {
         border: 1px solid var(--line);
         border-radius: 10px;
         background: var(--panel);
-        padding: 0.6rem;
-        margin-bottom: 0.65rem;
+        padding: 0.42rem;
+        margin-bottom: 0;
+        min-height: 0;
+        overflow: hidden;
       }
 
       .title {
-        margin: 0 0 0.45rem;
+        margin: 0 0 0.2rem;
         color: var(--accent);
-        font-size: 0.78rem;
-        letter-spacing: 0.12em;
+        font-size: 0.64rem;
+        letter-spacing: 0.09em;
         text-transform: uppercase;
         font-weight: 700;
       }
@@ -122,20 +126,20 @@
       .row {
         display: flex;
         justify-content: space-between;
-        gap: 0.6rem;
+        gap: 0.35rem;
         align-items: center;
-        margin-bottom: 0.3rem;
+        margin-bottom: 0.14rem;
       }
 
       .label {
         color: var(--muted);
-        font-size: 0.8rem;
+        font-size: 0.7rem;
         flex: 1 1 auto;
         min-width: 0;
       }
 
       .value {
-        font-size: 0.8rem;
+        font-size: 0.72rem;
         font-weight: 650;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
@@ -148,7 +152,7 @@
 
       .toggles {
         display: flex;
-        gap: 0.8rem;
+        gap: 0.48rem;
         flex-wrap: wrap;
       }
 
@@ -157,32 +161,32 @@
         gap: 0.35rem;
         align-items: center;
         color: var(--ink);
-        font-size: 0.87rem;
+        font-size: 0.74rem;
       }
 
       .metrics {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.42rem;
+        gap: 0.28rem;
       }
 
       .metric {
         border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
         border-radius: 8px;
         background: color-mix(in srgb, var(--panel) 78%, transparent);
-        padding: 0.38rem 0.45rem;
+        padding: 0.26rem 0.3rem;
       }
 
       .metric .k {
-        font-size: 0.58rem;
+        font-size: 0.5rem;
         color: var(--muted);
-        letter-spacing: 0.03em;
+        letter-spacing: 0.02em;
         text-transform: uppercase;
       }
 
       .metric .v {
-        margin-top: 0.1rem;
-        font-size: 0.78rem;
+        margin-top: 0.04rem;
+        font-size: 0.7rem;
         font-weight: 650;
         white-space: nowrap;
         overflow: hidden;
@@ -191,24 +195,20 @@
       }
 
       .canvas-wrap {
-        flex: 0 0 280px;
-        height: 280px;
         min-height: 0;
         padding: 0;
         overflow: hidden;
       }
 
       .sphere-wrap {
-        flex: 0 0 280px;
-        height: 280px;
-        min-height: 280px;
+        min-height: 0;
       }
 
       #heatmapCanvas,
       #sphereCanvas {
         width: 100%;
         height: 100%;
-        min-height: 280px;
+        min-height: 0;
         display: block;
       }
 
@@ -229,6 +229,11 @@
         top: 12px;
         z-index: 40;
         backdrop-filter: blur(4px);
+      }
+
+      .panel .theme-btn {
+        padding: 0.2rem 0.45rem;
+        font-size: 0.72rem;
       }
 
       @media (max-width: 1240px) {
@@ -294,6 +299,9 @@
 
               <div class="row"><span class="label">Points / Label</span><span class="value" id="ptsVal">10</span></div>
               <input id="pts" type="range" min="10" max="20" value="10" />
+
+              <div class="row"><span class="label">Samples / Pair</span><span class="value" id="pairSizeVal">2</span></div>
+              <input id="pairSize" type="range" min="2" max="6" value="2" />
             </div>
 
             <div class="section">
@@ -308,7 +316,7 @@
               <div class="title">Metrics</div>
               <div class="metrics">
                 <div class="metric">
-                  <div class="k">Batch (2n)</div>
+                  <div class="k">Batch (m*n)</div>
                   <div class="v" id="batchM">12</div>
                 </div>
                 <div class="metric">
@@ -357,6 +365,7 @@
         exp: document.getElementById("exp"),
         topk: document.getElementById("topk"),
         pts: document.getElementById("pts"),
+        pairSize: document.getElementById("pairSize"),
         supcon: document.getElementById("supcon"),
         gelu: document.getElementById("gelu"),
       };
@@ -368,6 +377,7 @@
         expVal: document.getElementById("expVal"),
         topkVal: document.getElementById("topkVal"),
         ptsVal: document.getElementById("ptsVal"),
+        pairSizeVal: document.getElementById("pairSizeVal"),
         batchM: document.getElementById("batchM"),
         featM: document.getElementById("featM"),
         mseM: document.getElementById("mseM"),
@@ -379,13 +389,13 @@
       const simulateBtn = document.getElementById("simulateBtn");
       const goToZeroBtn = document.getElementById("goToZeroBtn");
 
-      const colors = ["#34d4ff", "#22c55e", "#facc15", "#fb7185", "#a78bfa", "#f97316", "#14b8a6", "#60a5fa"];
       const sessionSeed = Math.floor(Math.random() * 1_000_000_000);
 
       const state = {
         step: 0,
         n: 6,
         batch: 12,
+        pairSize: 2,
         inputDim: 8,
         expansion: 5,
         featureDim: 40,
@@ -493,6 +503,71 @@
         return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
       }
 
+      function hslToHex(h, s, l) {
+        const ss = s / 100;
+        const ll = l / 100;
+        const c = (1 - Math.abs(2 * ll - 1)) * ss;
+        const hp = h / 60;
+        const x = c * (1 - Math.abs((hp % 2) - 1));
+        let r1 = 0;
+        let g1 = 0;
+        let b1 = 0;
+        if (hp >= 0 && hp < 1) {
+          r1 = c;
+          g1 = x;
+        } else if (hp >= 1 && hp < 2) {
+          r1 = x;
+          g1 = c;
+        } else if (hp >= 2 && hp < 3) {
+          g1 = c;
+          b1 = x;
+        } else if (hp >= 3 && hp < 4) {
+          g1 = x;
+          b1 = c;
+        } else if (hp >= 4 && hp < 5) {
+          r1 = x;
+          b1 = c;
+        } else {
+          r1 = c;
+          b1 = x;
+        }
+        const m = ll - c / 2;
+        const r = Math.round((r1 + m) * 255);
+        const g = Math.round((g1 + m) * 255);
+        const b = Math.round((b1 + m) * 255);
+        const toHex = (v) => v.toString(16).padStart(2, "0");
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+      }
+
+      function conceptColor(cls) {
+        const palette = [
+          "#ff0054",
+          "#00c2ff",
+          "#8bd400",
+          "#ff8a00",
+          "#7a5cff",
+          "#00d3a7",
+          "#ffd000",
+          "#ff4db8",
+          "#4ecb71",
+          "#4f7cff",
+          "#ff3b30",
+          "#00a3a3",
+          "#c6a300",
+          "#b05cff",
+          "#00b8ff",
+          "#7ddf64",
+          "#ff6f61",
+          "#2ec4b6",
+          "#f6bd60",
+          "#9b5de5",
+        ];
+        if (cls < palette.length) return palette[cls];
+        const h = (cls * 137.508) % 360;
+        const l = cls % 2 === 0 ? 56 : 44;
+        return hslToHex(h, 90, l);
+      }
+
       function resizeCanvas(canvas, ctx) {
         const ratio = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
@@ -523,6 +598,7 @@
         state.inputDim = Number(controls.inDim.value);
         state.expansion = Number(controls.exp.value);
         state.points = Number(controls.pts.value);
+        state.pairSize = Number(controls.pairSize.value);
         state.supcon = controls.supcon.checked;
         state.gelu = controls.gelu.checked;
         const isInit = state.step === 0;
@@ -530,7 +606,7 @@
         const geluData = isInit ? false : state.gelu;
         const methodWarmup = smoothstep01(state.step / 140);
 
-        state.batch = state.n * 2;
+        state.batch = state.n * state.pairSize;
         state.featureDim = state.inputDim * state.expansion;
 
         controls.topk.min = "6";
@@ -549,10 +625,10 @@
 
         state.inputRows = [];
         for (let c = 0; c < state.n; c++) {
-          const a = centers[c].map((v) => v + randn(rng) * noise);
-          const b = centers[c].map((v) => v + randn(rng) * noise);
-          state.inputRows.push({ cls: c, pair: c, vec: a });
-          state.inputRows.push({ cls: c, pair: c, vec: b });
+          for (let s = 0; s < state.pairSize; s++) {
+            const sample = centers[c].map((v) => v + randn(rng) * noise);
+            state.inputRows.push({ cls: c, pair: c, sid: s, vec: sample });
+          }
         }
 
         const enc = Array.from({ length: state.featureDim }, () => Array.from({ length: state.inputDim }, () => randn(structRng) * 0.42));
@@ -625,6 +701,12 @@
           return s / Math.max(1, state.n);
         });
 
+        // Per-sample style inside each label to preserve intra-label variance.
+        const styleRng = seededRandom(sessionSeed + 191919 + state.n * 13 + state.inputDim * 17 + state.expansion * 19 + state.pairSize * 23);
+        const sampleStyleTemplate = Array.from({ length: state.n }, () =>
+          Array.from({ length: state.pairSize }, () => Array.from({ length: state.featureDim }, () => randn(styleRng) * 0.55))
+        );
+
         const sharedProto = Array.from({ length: state.featureDim }, () => 0.32 + Math.abs(randn(structRng)) * 0.22);
 
         const noneFinal = { own: 1.0, shared: 0.28, cross: 0.3, leak: 0.06 };
@@ -676,9 +758,12 @@
         const concentrationTarget = method === "both" ? 1.0 : method === "gelu" || method === "supcon" ? 0.65 : 0.35;
         const concentrationStrength = 0.35 * (1 - methodWarmup) + concentrationTarget * methodWarmup;
         const concentration = concentrationStrength * p;
+        const intraTarget = method === "both" ? 0.14 : method === "gelu" || method === "supcon" ? 0.18 : 0.22;
+        const intraScale = (0.26 * (1 - p) + intraTarget * p) * (0.8 + 0.2 * methodWarmup);
 
         state.featRows = state.inputRows.map((row) => {
           const targetSet = new Set(classTargets[row.cls]);
+          const sampleStyle = sampleStyleTemplate[row.cls][Math.min(row.sid ?? 0, state.pairSize - 1)];
           const z = Array.from({ length: state.featureDim }, (_, i) => {
             let s = 0;
             for (let j = 0; j < state.inputDim; j++) s += enc[i][j] * row.vec[j];
@@ -687,7 +772,8 @@
             const shared = sharedProto[i] * cfg.shared;
             const leak = cfg.leak * (0.6 + (structRng() - 0.5) * 0.5 * dispersionScale);
             const nse = randn(rng) * ((0.12 * (1 - p) + 0.02) * dispersionScale);
-            return Math.max(0.015, own + cross + shared + leak + s * 0.03 + nse);
+            const intra = sampleStyle[i] * intraScale;
+            return Math.max(0.015, own + cross + shared + leak + intra + s * 0.03 + nse);
           });
 
           // As optimization proceeds, target indices dominate more strongly.
@@ -702,6 +788,12 @@
 
           const gamma = 1 + concentration * 2.1;
           for (let i = 0; i < z.length; i++) z[i] = Math.pow(z[i], gamma);
+
+          // Keep slight sample-specific spread even after sharpening.
+          for (let i = 0; i < z.length; i++) {
+            z[i] *= 1 + sampleStyle[i] * 0.08 * intraScale;
+            z[i] = Math.max(0.001, z[i]);
+          }
 
           if (geluData) {
             const gz = Array.from({ length: state.featureDim }, (_, i) => {
@@ -749,7 +841,7 @@
         state.mse = clamp((1 - retained) * (1.1 - 0.65 * p) + 0.015, 0, 999);
         state.supLoss = supconData ? computeMockSupConLoss(p) * methodWarmup : 0;
 
-        buildSphere(rng, supconData, geluData, methodWarmup);
+        buildSphereFromFeatures();
         buildTopkOverlap();
         syncUI();
       }
@@ -787,54 +879,55 @@
         return anchors ? sumLoss / anchors : 0;
       }
 
-      function buildSphere(rng, supconData, geluData, methodWarmup) {
-        const centers = Array.from({ length: state.n }, () => normalize3([randn(rng), randn(rng), randn(rng)]));
-        state.centroids = centers;
-
-        const p = smoothstep01(state.step / 1000);
-        let pull;
-        let jitter;
-        let mix;
-
-        if (state.step === 0) {
-          pull = 0.18;
-          jitter = 0.28;
-          mix = 0.18;
-        } else {
-          const base = { pull: 0.2 + 0.28 * p, jitter: 0.24 * (1 - p * 0.7) + 0.06, mix: 0.16 };
-          const target =
-            supconData && geluData
-              ? { pull: 0.45 + 0.5 * p, jitter: 0.12 * (1 - p) + 0.02, mix: 0.02 }
-              : supconData || geluData
-                ? { pull: 0.26 + 0.38 * p, jitter: 0.18 * (1 - p) + 0.04, mix: 0.08 }
-                : base;
-          pull = base.pull * (1 - methodWarmup) + target.pull * methodWarmup;
-          jitter = base.jitter * (1 - methodWarmup) + target.jitter * methodWarmup;
-          mix = base.mix * (1 - methodWarmup) + target.mix * methodWarmup;
+      function buildSphereFromFeatures() {
+        // Build hypersphere points from actual feature activations only.
+        const projRng = seededRandom(sessionSeed + 424242 + state.featureDim * 13);
+        const projW = Array.from({ length: 3 }, () => Array.from({ length: state.featureDim }, () => randn(projRng)));
+        for (let r = 0; r < 3; r++) {
+          let n = 0;
+          for (let c = 0; c < state.featureDim; c++) n += projW[r][c] * projW[r][c];
+          const inv = 1 / Math.sqrt(n || 1);
+          for (let c = 0; c < state.featureDim; c++) projW[r][c] *= inv;
         }
 
-        const points = [];
-        for (let cls = 0; cls < state.n; cls++) {
-          for (let i = 0; i < state.points; i++) {
-            const base = normalize3([randn(rng), randn(rng), randn(rng)]);
-            let target = cls;
-            if (rng() < mix) target = Math.floor(rng() * state.n);
-            const c = centers[target];
-            const p3 = normalize3([
-              base[0] * (1 - pull) + c[0] * pull + randn(rng) * jitter,
-              base[1] * (1 - pull) + c[1] * pull + randn(rng) * jitter,
-              base[2] * (1 - pull) + c[2] * pull + randn(rng) * jitter,
-            ]);
-            points.push({ cls, p: p3 });
+        const points = state.topkRows.map((feat, i) => {
+          let x = 0;
+          let y = 0;
+          let z = 0;
+          for (let d = 0; d < state.featureDim; d++) {
+            const v = feat[d];
+            x += projW[0][d] * v;
+            y += projW[1][d] * v;
+            z += projW[2][d] * v;
           }
-        }
+          return { cls: state.inputRows[i].cls, p: normalize3([x, y, z]) };
+        });
         state.spherePoints = points;
+
+        const centers = Array.from({ length: state.n }, () => [0, 0, 0]);
+        const counts = Array.from({ length: state.n }, () => 0);
+        for (const pt of points) {
+          centers[pt.cls][0] += pt.p[0];
+          centers[pt.cls][1] += pt.p[1];
+          centers[pt.cls][2] += pt.p[2];
+          counts[pt.cls]++;
+        }
+        for (let c = 0; c < state.n; c++) {
+          if (counts[c] > 0) {
+            centers[c][0] /= counts[c];
+            centers[c][1] /= counts[c];
+            centers[c][2] /= counts[c];
+          }
+          centers[c] = normalize3(centers[c]);
+        }
+        state.centroids = centers;
 
         let correct = 0;
         for (const pt of points) {
           let best = -1;
           let bestC = -1;
           for (let c = 0; c < centers.length; c++) {
+            if (counts[c] === 0) continue;
             const cs = dot(pt.p, centers[c]);
             if (cs > bestC) {
               bestC = cs;
@@ -876,16 +969,6 @@
           }
         }
 
-        // Requirement: when both methods are on, TopK overlap should be zero.
-        if (state.supcon && state.gelu) {
-          for (let i = 0; i < state.n; i++) {
-            for (let j = 0; j < state.n; j++) {
-              if (i !== j) matrix[i][j] = 0;
-            }
-          }
-          maxVal = 1;
-        }
-
         state.overlapMatrix = matrix;
         state.maxOverlap = maxVal;
       }
@@ -897,6 +980,7 @@
         out.expVal.textContent = String(state.expansion);
         out.topkVal.textContent = String(state.topk);
         out.ptsVal.textContent = String(state.points);
+        out.pairSizeVal.textContent = String(state.pairSize);
         out.batchM.textContent = String(state.batch);
         out.featM.textContent = String(state.featureDim);
         out.mseM.textContent = state.mse.toFixed(4);
@@ -908,6 +992,7 @@
         controls.inDim.disabled = !editableAtZero;
         controls.exp.disabled = !editableAtZero;
         controls.pts.disabled = !editableAtZero;
+        controls.pairSize.disabled = !editableAtZero;
         controls.supcon.disabled = !editableAtZero;
         controls.gelu.disabled = !editableAtZero;
         goToZeroBtn.style.display = state.finished ? "inline-block" : "none";
@@ -993,24 +1078,29 @@
         mctx.fillText(subtitle, x + 2, y + 33);
 
         const top = y + 45;
-        const pairCount = Math.floor(rows.length / 2);
+        const m = Math.max(1, state.pairSize);
+        const pairCount = Math.floor(rows.length / m);
         const rowGap = (h - 58) / Math.max(1, pairCount);
-        let sq = Math.min(18, Math.max(5, rowGap * 0.42));
+        let sq = Math.min(16, Math.max(3, rowGap * (m > 2 ? 0.3 : 0.42)));
         sq = Math.min(sq, Math.max(4, rowGap - 4));
-        const pairDist = Math.max(2, Math.min(rowGap * 0.42, rowGap - sq - 2));
+        const span = Math.max(sq, rowGap * 0.62);
+        const step = m > 1 ? Math.max(2, Math.min((span - sq) / (m - 1), sq + 2)) : 0;
 
         for (let p = 0; p < pairCount; p++) {
-          const i0 = p * 2;
+          const i0 = p * m;
           const yMid = top + p * rowGap + rowGap * 0.5;
-          const y0 = yMid - pairDist * 0.5;
-          const y1 = yMid + pairDist * 0.5;
+          const yStart = yMid - (step * (m - 1)) * 0.5;
+          const y0 = yStart;
+          const y1 = yStart + step * (m - 1);
 
           const cls = rows[i0].cls;
-          const col = colors[cls % colors.length];
+          const col = conceptColor(cls);
 
           mctx.fillStyle = col;
-          mctx.fillRect(x + 8, y0 - sq / 2, sq, sq);
-          mctx.fillRect(x + 8, y1 - sq / 2, sq, sq);
+          for (let s = 0; s < m; s++) {
+            const ys = yStart + s * step;
+            mctx.fillRect(x + 8, ys - sq / 2, sq, sq);
+          }
 
           mctx.strokeStyle = "rgba(148, 163, 184, 0.45)";
           mctx.lineWidth = 1;
@@ -1047,7 +1137,7 @@
             const t = row[c] / maxv;
             const bh = (rowH - 1) * clamp(t, 0, 1);
             const cls = state.inputRows[r].cls;
-            const col = colors[cls % colors.length];
+            const col = conceptColor(cls);
             mctx.fillStyle = row[c] === 0 ? "rgba(148,163,184,0.14)" : hexToRgba(col, 0.35 + t * 0.5);
             mctx.fillRect(x + c * bw + 0.25, top + r * rowH + (rowH - 1) - bh, Math.max(0.45, bw - 0.4), bh);
           }
@@ -1227,7 +1317,7 @@
 
         proj.sort((a, b) => a.z - b.z);
         for (const p of proj) {
-          sctx.fillStyle = hexToRgba(colors[p.cls % colors.length], p.a);
+          sctx.fillStyle = hexToRgba(conceptColor(p.cls), p.a);
           sctx.beginPath();
           sctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
           sctx.fill();
