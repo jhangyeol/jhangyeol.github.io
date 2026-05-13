@@ -460,18 +460,19 @@ ul.task-list input[type="checkbox"] {
 }
 
 .social-with-map {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
+  display: block;
 }
 
 .clustrmaps-widget {
-  width: 4.2rem;
-  height: 4.2rem;
+  width: 11.2rem;
+  height: 6rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: fixed;
+  right: 1rem;
+  bottom: 4.25rem;
+  z-index: 999;
 }
 
 .clustrmaps-widget iframe,
@@ -483,15 +484,20 @@ ul.task-list input[type="checkbox"] {
 }
 
 @media (max-width: 575px) {
-  .social-with-map {
-    display: block;
-  }
-
   .clustrmaps-widget {
-    margin: 0.75rem auto 0;
-    width: 3.8rem;
-    height: 3.8rem;
+    position: static;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    margin: 1.8rem auto 0;
+    width: 8.4rem;
+    height: 4.5rem;
   }
+}
+
+.clustrmaps-widget .clstm.clustrmaps-visitors,
+.clustrmaps-widget .clstm.clustrmaps-date {
+  display: none !important;
 }
 
 .wechat-modal {
