@@ -66,20 +66,10 @@ layout: default
 
     <!-- Social -->
     {% if page.social %}
-      <div class="social-with-map">
-        <div class="social">
-          <div class="contact-icons">{% include social.liquid %}</div>
+      <div class="social">
+        <div class="contact-icons">{% include social.liquid %}</div>
 
-          <div class="contact-note">{{ site.contact_note }}</div>
-        </div>
-
-        <div class="clustrmaps-widget" aria-label="Visitor map">
-          <script
-            type="text/javascript"
-            id="clustrmaps"
-            src="//clustrmaps.com/map_v2.js?d=n-IrVIW6uDAsij-5cM5Zxo6tqXPFBHRzjwpH-dNROag&cl=ffffff&w=a"
-          ></script>
-        </div>
+        <div class="contact-note">{{ site.contact_note }}</div>
       </div>
     {% endif %}
 
