@@ -467,18 +467,12 @@ ul.task-list input[type="checkbox"] {
 }
 
 .clustrmaps-widget {
-  width: clamp(150px, 14vw, 190px);
-  height: clamp(150px, 14vw, 190px);
-  overflow: hidden;
+  width: 260px;
+  height: 260px;
+  overflow: visible;
   text-align: center;
-}
-
-.clustrmaps-widget iframe,
-.clustrmaps-widget canvas,
-.clustrmaps-widget img,
-.clustrmaps-widget div {
-  max-width: 100% !important;
-  max-height: 100% !important;
+  transform: scale(0.5);
+  transform-origin: center center;
 }
 
 @media (max-width: 575px) {
@@ -488,13 +482,12 @@ ul.task-list input[type="checkbox"] {
 
   .clustrmaps-widget {
     position: static;
-    right: auto;
-    bottom: auto;
-    z-index: auto;
     margin-top: 1rem;
     text-align: center;
-    width: clamp(92px, 30vw, 130px);
-    height: clamp(92px, 30vw, 130px);
+    width: 220px;
+    height: 220px;
+    transform: scale(0.4);
+    transform-origin: top center;
     margin-left: auto;
     margin-right: auto;
   }
