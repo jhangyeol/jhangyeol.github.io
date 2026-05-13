@@ -4,10 +4,6 @@ title: about
 permalink: /
 subtitle: >
   Undergraduate Researcher<br/>
-  <span style="font-size: 0.85em; font-style: italic;">
-    hkjung1123 [at] gmail [dot] com
-  </span>
-  <br/>
   <span style="font-size: 0.75em; font-style: italic;">
     hkjung1123 [at] kookmin [dot] ac [dot] kr
   </span>
