@@ -459,14 +459,33 @@ ul.task-list input[type="checkbox"] {
   }
 }
 
+.social-with-map {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.25rem;
+}
+
 .clustrmaps-widget {
-  position: fixed;
-  right: 1rem;
-  bottom: 4.5rem;
-  z-index: 1000;
+  width: clamp(150px, 14vw, 190px);
+  height: clamp(150px, 14vw, 190px);
+  overflow: hidden;
+  text-align: center;
+}
+
+.clustrmaps-widget iframe,
+.clustrmaps-widget canvas,
+.clustrmaps-widget img,
+.clustrmaps-widget div {
+  max-width: 100% !important;
+  max-height: 100% !important;
 }
 
 @media (max-width: 575px) {
+  .social-with-map {
+    display: block;
+  }
+
   .clustrmaps-widget {
     position: static;
     right: auto;
@@ -474,6 +493,10 @@ ul.task-list input[type="checkbox"] {
     z-index: auto;
     margin-top: 1rem;
     text-align: center;
+    width: clamp(92px, 30vw, 130px);
+    height: clamp(92px, 30vw, 130px);
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 
