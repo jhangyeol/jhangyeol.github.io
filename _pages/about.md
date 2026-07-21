@@ -31,8 +31,6 @@ announcements:
 #   limit: 3 # leave blank to include all the blog posts
 ---
 
-I am an incoming master's student at the [School of Computing](https://cs.kaist.ac.kr/), [KAIST](https://www.kaist.ac.kr/), starting in the 2026 fall semester.
+I am an incoming master's student at the [School of Computing](https://cs.kaist.ac.kr/), [Korea Advanced Institute of Science and Technology (KAIST)](https://www.kaist.ac.kr/), starting in the 2026 fall semester, where I am advised by [Prof. Eunho Yang](https://scholar.google.com/citations?user=UWO1mloAAAAJ&hl=ko&oi=ao) at the [Machine Learning and Intelligence Lab (MLILAB)](https://mli.kaist.ac.kr/).
 
-My research interests lie in **AI safety and mechanistic interpretability**, with a current focus on the low-dimensional manifold of neural networks.
-
-Previously, I was an intern at EdgeAI (Yonsei University), advised by Prof. Dongjun Han; an undergraduate intern at EffL Lab (POSTECH), advised by Prof. Jaeho Lee; and a visiting student researcher at the Dutt Research Group (University of California, Irvine), supervised by Prof. Nikil Dutt. I was also affiliated with EAIC Lab (Kookmin University) under the supervision of Prof. Eunji Kwon.
+My research interests lie in **AI safety and mechanistic interpretability**, with a current focus on the capturing low-dimensional manifold of neural networks with sparse autoencoders.
