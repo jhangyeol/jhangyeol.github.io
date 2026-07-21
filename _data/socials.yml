@@ -52,7 +52,7 @@ scholar_userid: yGVBIPUAAAAJ # your Google Scholar ID
 # x_username: # your X handle
 # youtube_id: # your youtube channel id (youtube.com/@<youtube_id>)
 # zotero_username: # your zotero username
-custom_social: # can be any name here other than the ones already defined above
-  logo: https://tistory1.daumcdn.net/tistory/6364979/attach/52ae6fd50fda4c7b9d50491a592c0649 # can be png, svg, jpg
-  title: Study Blog
-  url: https://kmuhan-study.tistory.com/
+# custom_social: # can be any name here other than the ones already defined above
+#   logo: https://tistory1.daumcdn.net/tistory/6364979/attach/52ae6fd50fda4c7b9d50491a592c0649 # can be png, svg, jpg
+#   title: Study Blog
+#   url: https://kmuhan-study.tistory.com/
