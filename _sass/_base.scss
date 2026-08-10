@@ -522,6 +522,75 @@ footer.sticky-bottom {
   }
 }
 
+// Flag Counter
+.flag-counter {
+  position: fixed;
+  right: 24px;
+  bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+  z-index: 9;
+  line-height: 0;
+
+  a {
+    display: block;
+    border-radius: 3px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+
+    &:hover,
+    &:focus-visible {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+  }
+
+  img {
+    display: block;
+    width: 198px;
+    max-width: calc(100vw - 48px);
+    height: auto;
+  }
+}
+
+// Keep the existing back-to-top button clear of the counter.
+#back-to-top {
+  right: 234px;
+  bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+}
+
+@media only screen and (max-width: 576px) {
+  .flag-counter {
+    right: 10px;
+    bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+
+    a {
+      opacity: 0.88;
+    }
+
+    img {
+      width: 160px;
+      max-width: calc(100vw - 20px);
+    }
+  }
+
+  #back-to-top {
+    right: 180px;
+    bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media only screen and (max-width: 280px) {
+  .flag-counter img {
+    width: 104px;
+  }
+
+  #back-to-top {
+    right: 10px;
+    bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 // CV
 
 .cv {
