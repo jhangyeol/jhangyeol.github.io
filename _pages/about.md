@@ -35,5 +35,5 @@ I'm a first-year M.S. student at the [MLILAB (Machine Learning and Intelligence 
 
 My recent research focuses on understanding the mechanisms underlying generalization and misalignment in neural networks. More specifically, I am interested in the following research questions:
 
-- Do emergent and subliminal misalignment share a common mechanism driven by shifts in a model's intrinsic geometry during post-training?
+- Can we understand how post-training shifts a model's high-dimensional intrinsic geometry?
 - How can we leverage mechanistic interpretability to build trustworthy neural networks that remain reliable in real-world settings?
