@@ -23,7 +23,7 @@ social: true # includes social icons at the bottom of the page
 announcements:
   enabled: true # includes a list of news items
   scrollable: true # adds a vertical scroll bar if there are more than 3 news items
-  limit: 5 # leave blank to include all the news in the `_news` folder
+  limit: 1 # leave blank to include all the news in the `_news` folder
 
 # latest_posts:
 #   enabled: true
@@ -33,4 +33,7 @@ announcements:
 
 I'm a first-year M.S. student at the [MLILAB (Machine Learning and Intelligence Lab)](https://mli.kaist.ac.kr/), [KAIST](https://www.kaist.ac.kr/) (advisor: Prof. [Eunho Yang](https://scholar.google.com/citations?user=UWO1mloAAAAJ&hl=ko&oi=ao)).
 
-My research interests lie in **mechanistic interpretability and generalization**, with a current focus on the subliminal learning.
+My recent research focuses on understanding the mechanisms underlying generalization and misalignment in neural networks. More specifically, I am interested in the following research questions:
+
+- Do emergent and subliminal misalignment share a common mechanism driven by shifts in a model's intrinsic geometry during post-training?
+- How can we leverage mechanistic interpretability to build trustworthy neural networks that remain reliable in real-world settings?
