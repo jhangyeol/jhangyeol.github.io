@@ -37,3 +37,4 @@ My recent research focuses on understanding the mechanisms underlying generaliza
 
 - Can we understand how post-training shifts a model's high-dimensional intrinsic geometry?
 - How can we leverage mechanistic interpretability to build trustworthy neural networks that remain reliable in real-world settings?
+- (A deeper question on my mind) How can we build AI models that exhibit characteristics of complex biological organisms, such as evolution, self-replication, adaptation, and socialization?
