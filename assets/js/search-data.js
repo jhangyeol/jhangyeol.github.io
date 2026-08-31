@@ -16,6 +16,13 @@ ninja.data = [{
           handler: () => {
             window.location.href = "/publications/";
           },
+        },{id: "nav-projects",
+          title: "projects",
+          description: "A selection of projects I have worked on.",
+          section: "Navigation",
+          handler: () => {
+            window.location.href = "/projects/";
+          },
         },{id: "books-the-godfather",
           title: 'The Godfather',
           description: "",
@@ -34,7 +41,7 @@ ninja.data = [{
           title: 'PathOs',
           description: "Pathology Optimal Efficient Segmentation Tool Based on Human-in-the-loop Strategy",
           section: "Projects",handler: () => {
-              window.location.href = "/projects/example_project.html";
+              window.location.href = "/projects/pathos.html";
             },},{
         id: 'social-cv',
         title: 'CV',
