@@ -5,4 +5,4 @@ inline: true
 related_posts: false
 ---
 
-My first co-author paper 'Disentangled Sparse Representations for Concept-Separated Diffusion Unlearning' has been accepted to NeurIPS 2026! See you in Sydney! 🇦🇺
+My co-first author paper 'Disentangled Sparse Representations for Concept-Separated Diffusion Unlearning' has been accepted to NeurIPS 2026! See you in Sydney! 🇦🇺

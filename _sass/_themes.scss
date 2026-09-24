@@ -77,6 +77,10 @@
 }
 
 html[data-theme="dark"] {
+  .publications .conference-venue .conference-name {
+    color: #78b4ff;
+  }
+
   color-scheme: dark;
   --global-bg-color: #{$grey-color-dark};
   --global-code-bg-color: #{$code-bg-color-dark};

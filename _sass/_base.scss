@@ -745,6 +745,21 @@ footer.sticky-bottom {
     text-align: right;
   }
 
+  h2.publication-category {
+    color: var(--global-text-color);
+    text-align: left;
+    font-size: 1.5rem;
+  }
+
+  .conference-venue {
+    font-style: normal;
+    font-weight: 700;
+
+    .conference-name {
+      color: #2463b4;
+    }
+  }
+
   ol.bibliography {
     list-style: none;
     padding: 0;

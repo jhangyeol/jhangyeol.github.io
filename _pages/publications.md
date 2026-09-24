@@ -16,6 +16,9 @@ noindex: true
 
 <div class="publications">
 
-{% bibliography %}
+{% capture publication_entries %}
+{% bibliography --group_by none %}
+{% endcapture %}
+{{ publication_entries | group_publications }}
 
 </div>
