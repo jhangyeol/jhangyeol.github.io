@@ -53,7 +53,9 @@ module Jekyll
       name, pattern = match
       # Keep status text uncolored and normalize recognized full names to acronyms.
       parts = text.split(pattern, 2)
-      "<strong class=\"conference-venue\">#{CGI.escapeHTML(parts[0])}<span class=\"conference-name\">#{name}</span>#{CGI.escapeHTML(parts[1].to_s)}</strong>"
+      suffix = parts[1].to_s
+      year = suffix.slice!(/\A\s+(?:19|20)\d{2}\b/).to_s
+      "<strong class=\"conference-venue\">#{CGI.escapeHTML(parts[0])}<span class=\"conference-name\">#{name}#{CGI.escapeHTML(year)}</span>#{CGI.escapeHTML(suffix)}</strong>"
     end
 
     def group_publications(html)
