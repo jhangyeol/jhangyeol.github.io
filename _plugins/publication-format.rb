@@ -21,6 +21,8 @@ module Jekyll
       'UAI' => /\bUAI\b/i,
       'KDD' => /\bKDD\b/i
     }.freeze
+    # Display emphasis is independent of automatic conference classification.
+    HIGHLIGHTED_CONFERENCES = %w[NeurIPS ICML ICLR AAAI CVPR ICCV ECCV IJCAI ACL EMNLP NAACL AISTATS UAI KDD].freeze
 
     # An optional category field can override inference for ambiguous venues.
     def publication_category(entry)
@@ -40,18 +42,18 @@ module Jekyll
     end
 
     def publication_venue(venue)
-      venue.to_s.gsub(/\b(?:19|20)\d{2}\b/, '').gsub(/\s+/, ' ').strip
+      venue.to_s.gsub(/\s+/, ' ').strip
     end
 
     def conference_venue(venue)
       text = publication_venue(venue)
-      match = CONFERENCE_NAMES.find { |_name, pattern| text.match?(pattern) }
+      match = CONFERENCE_NAMES.find { |name, pattern| HIGHLIGHTED_CONFERENCES.include?(name) && text.match?(pattern) }
       return CGI.escapeHTML(text) unless match
 
       name, pattern = match
       # Keep status text uncolored and normalize recognized full names to acronyms.
       parts = text.split(pattern, 2)
-      "#{CGI.escapeHTML(parts[0])}<span class=\"conference-name\">#{name}</span>#{CGI.escapeHTML(parts[1].to_s)}"
+      "<strong class=\"conference-venue\">#{CGI.escapeHTML(parts[0])}<span class=\"conference-name\">#{name}</span>#{CGI.escapeHTML(parts[1].to_s)}</strong>"
     end
 
     def group_publications(html)

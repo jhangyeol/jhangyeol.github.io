@@ -154,9 +154,9 @@
     <!-- Venue (dates are retained in BibTeX for sorting and citations only). -->
     {% assign venue = entry.booktitle | default: entry.journal | default: entry.school %}
     {% if publication_category == 'Conferences' %}
-      {% capture entrytype %}<strong class="conference-venue">{{ venue | conference_venue }}</strong>{% endcapture %}
+      {% capture entrytype %}{{ venue | conference_venue }}{% endcapture %}
     {% else %}
-      {% capture entrytype %}<em>{{ venue | publication_venue | escape }}</em>{% endcapture %}
+      {% capture entrytype %}{{ venue | publication_venue | escape }}{% endcapture %}
     {% endif %}
     {% if entry.location %}
       {% capture entrytype %}{{ entrytype }}{{ ", " }}{{ entry.location }}{% endcapture %}
