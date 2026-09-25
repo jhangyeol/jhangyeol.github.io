@@ -47,15 +47,11 @@ module Jekyll
 
     def conference_venue(venue)
       text = publication_venue(venue)
-      match = CONFERENCE_NAMES.find { |name, pattern| HIGHLIGHTED_CONFERENCES.include?(name) && text.match?(pattern) }
-      return CGI.escapeHTML(text) unless match
-
-      name, pattern = match
-      # Keep status text uncolored and normalize recognized full names to acronyms.
-      parts = text.split(pattern, 2)
-      suffix = parts[1].to_s
-      year = suffix.slice!(/\A\s+(?:19|20)\d{2}\b/).to_s
-      "<strong class=\"conference-venue\">#{CGI.escapeHTML(parts[0])}<span class=\"conference-name\">#{name}#{CGI.escapeHTML(year)}</span>#{CGI.escapeHTML(suffix)}</strong>"
+      # Preserve the BibTeX wording; emphasize only recognized parenthesized acronyms.
+      acronyms = Regexp.union(HIGHLIGHTED_CONFERENCES)
+      CGI.escapeHTML(text).gsub(/\((#{acronyms})\)/i) do
+        "(<strong class=\"conference-venue\"><span class=\"conference-name\">#{Regexp.last_match(1)}</span></strong>)"
+      end
     end
 
     def group_publications(html)
