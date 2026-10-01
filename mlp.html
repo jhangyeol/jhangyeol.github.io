@@ -1,0 +1,2970 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="An interactive two-layer MLP with editable neurons, eight datasets, and a live loss landscape." />
+    <title>2 layer MLP with simple data</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f5f1;
+        --ink: #252b3b;
+        --muted: #697283;
+        --line: #e1e2e9;
+        --purple: #7454d4;
+        --orange: #de7841;
+        --teal: #269a92;
+        --soft: #f0ecfa;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.6 Inter,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          "Noto Sans KR",
+          sans-serif;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button,
+      select {
+        cursor: pointer;
+      }
+      button {
+        padding: 8px 13px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: white;
+        color: var(--ink);
+        font-weight: 600;
+      }
+      button:hover {
+        background: var(--soft);
+        border-color: #bca9e8;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      button.primary {
+        background: var(--purple);
+        border-color: var(--purple);
+        color: white;
+        min-width: 125px;
+      }
+      :focus-visible {
+        outline: 3px solid #b099ea;
+        outline-offset: 3px;
+      }
+      select,
+      input[type="number"] {
+        width: 100%;
+        min-width: 0;
+        padding: 6px 9px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fafafa;
+        color: var(--ink);
+        font-size: 12px;
+      }
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--purple);
+        cursor: pointer;
+      }
+      .shell {
+        max-width: 1280px;
+        margin: auto;
+        padding: 0 32px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 32px 0 27px;
+      }
+      h1 {
+        font-size: clamp(23px, 3vw, 34px);
+        letter-spacing: -1px;
+        line-height: 1.25;
+        margin: 0;
+        font-weight: 720;
+      }
+      #experiments {
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+        padding-bottom: 40px;
+      }
+      .experiment {
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        background: #fff;
+        overflow: hidden;
+        min-width: 0;
+      }
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 19px 23px;
+        border-bottom: 1px solid var(--line);
+      }
+      .panel-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      h2 {
+        font-size: 17px;
+        margin: 0;
+        letter-spacing: -0.3px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        background: var(--soft);
+        color: var(--purple);
+        font:
+          12px ui-monospace,
+          monospace;
+      }
+      .width-label {
+        color: var(--purple);
+        font:
+          12px ui-monospace,
+          monospace;
+      }
+      .status {
+        color: var(--teal);
+        background: #e8f4ef;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .settings {
+        padding: 16px 23px;
+      }
+      .dataset-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .dataset-caption {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .dataset-tabs {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+      .dataset-tab {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        min-width: 86px;
+        padding: 6px 16px;
+        font-size: 12px;
+        font-weight: 550;
+      }
+      .dataset-tab svg {
+        display: block;
+        width: 56px;
+        height: 32px;
+        flex-shrink: 0;
+      }
+      .dataset-tab[aria-pressed="true"] {
+        background: var(--soft);
+        border-color: var(--purple);
+        color: var(--purple);
+      }
+      .control-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 13px;
+      }
+      .control {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .control-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 4px;
+      }
+      .plots {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 230px minmax(0, 1fr);
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      .plot-pane {
+        padding: 14px 15px 9px;
+        background: #fafbfc;
+        min-width: 0;
+      }
+      .latent-pane {
+        background: linear-gradient(150deg, #fcfbfe, #f4f3fa);
+      }
+      .plot-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        min-height: 30px;
+      }
+      .plot-heading strong {
+        font-size: 12px;
+      }
+      .tag {
+        font:
+          10px ui-monospace,
+          monospace;
+        color: var(--muted);
+      }
+      .mini-button {
+        font-size: 10px;
+        padding: 3px 7px;
+        font-weight: 500;
+      }
+      .plot-tools {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+      }
+      .axes {
+        display: flex;
+        gap: 4px;
+      }
+      .axes select {
+        width: 46px;
+        padding: 3px;
+        font:
+          10px ui-monospace,
+          monospace;
+        background: white;
+      }
+      canvas.scatter {
+        display: block;
+        width: 100%;
+        height: 260px;
+        touch-action: none;
+        cursor: grab;
+        border-radius: 8px;
+      }
+      canvas.scatter:active {
+        cursor: grabbing;
+      }
+      .plot-foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 5px;
+        flex-wrap: wrap;
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .legend {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        margin-right: 4px;
+      }
+      .interaction-hint {
+        margin: 7px 0 0;
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .network-pane {
+        border-left: 1px solid var(--line);
+        border-right: 1px solid var(--line);
+        padding: 15px 13px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-width: 0;
+      }
+      .network-shape {
+        text-align: center;
+        font:
+          12px ui-monospace,
+          monospace;
+        color: var(--purple);
+      }
+      .network {
+        width: 100%;
+        height: 110px;
+        display: block;
+      }
+      .formula {
+        text-align: center;
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--muted);
+        margin: 2px 0 13px;
+      }
+      .weight-key {
+        text-align: center;
+        font-size: 9px;
+        color: var(--muted);
+        margin: 0 0 12px;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
+      .metric-label {
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .metric-value {
+        font:
+          600 20px/1.7 ui-monospace,
+          monospace;
+        letter-spacing: -1px;
+      }
+      .metric-sub {
+        font-size: 9px;
+        color: var(--muted);
+      }
+      .panel-bottom {
+        padding: 15px 23px 17px;
+      }
+      .transport {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .transport button {
+        font-size: 12px;
+      }
+      .speed {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .speed select {
+        width: 60px;
+      }
+      .step-counter {
+        margin-left: auto;
+        font:
+          11px ui-monospace,
+          monospace;
+        white-space: nowrap;
+      }
+      .replay-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        margin: 12px 0 6px;
+      }
+      .replay-row label {
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .replay-row input {
+        min-width: 0;
+        margin: 0;
+      }
+      .history-area {
+        display: grid;
+        grid-template-columns: 1fr 190px;
+        align-items: center;
+        gap: 22px;
+      }
+      .loss {
+        display: block;
+        width: 100%;
+        height: 68px;
+      }
+      .history-note {
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .loss-key {
+        display: flex;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .loss-key span::before {
+        content: "";
+        display: inline-block;
+        width: 14px;
+        margin: 0 4px 3px 0;
+        border-top: 2px solid var(--purple);
+      }
+      .loss-key span:nth-child(2)::before {
+        border-top: 2px dashed var(--orange);
+      }
+      .export {
+        margin-top: 8px;
+      }
+      .error {
+        font-size: 12px;
+        color: #ab3e32;
+        margin: 8px 0 0;
+      }
+      .error:empty {
+        display: none;
+      }
+      #tooltip {
+        position: fixed;
+        z-index: 20;
+        pointer-events: none;
+        background: #262b3d;
+        color: white;
+        padding: 8px 11px;
+        border-radius: 7px;
+        font:
+          11px/1.6 ui-monospace,
+          monospace;
+        box-shadow: 0 5px 20px #0002;
+        max-width: 260px;
+        white-space: pre-line;
+      }
+      noscript {
+        display: block;
+        padding: 24px;
+        background: #ffe4cb;
+      }
+      @media (max-width: 950px) {
+        .shell {
+          padding: 0 20px;
+        }
+        .plots {
+          grid-template-columns: minmax(0, 1fr) 180px minmax(0, 1fr);
+        }
+        .plot-heading {
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+        .plot-tools {
+          flex-wrap: wrap;
+        }
+        .metric-value {
+          font-size: 17px;
+        }
+        .control-grid {
+          gap: 10px;
+        }
+        .network-pane {
+          padding: 12px 8px;
+        }
+        .panel-title {
+          gap: 8px;
+        }
+        h2 {
+          font-size: 15px;
+        }
+        .width-label {
+          font-size: 11px;
+        }
+        canvas.scatter {
+          height: 235px;
+        }
+      }
+      @media (max-width: 700px) {
+        .shell {
+          padding: 0 12px;
+        }
+        header {
+          padding: 25px 2px 20px;
+          gap: 12px;
+        }
+        h1 {
+          font-size: 23px;
+          max-width: 250px;
+        }
+        .panel-head {
+          padding: 15px;
+        }
+        .panel-title {
+          align-items: flex-start;
+        }
+        .width-label {
+          display: block;
+          margin-top: 3px;
+        }
+        .settings {
+          padding: 14px;
+        }
+        .dataset-row {
+          display: block;
+        }
+        .dataset-caption {
+          display: block;
+          margin-bottom: 5px;
+        }
+        .dataset-tabs {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 5px;
+        }
+        .dataset-tab {
+          min-width: 0;
+          padding: 6px 3px;
+          font-size: 11px;
+        }
+        .control-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .plots {
+          grid-template-columns: 1fr 1fr;
+        }
+        .input-pane {
+          order: 1;
+        }
+        .latent-pane {
+          order: 2;
+        }
+        .network-pane {
+          order: 3;
+          grid-column: 1/-1;
+          border-left: 0;
+          border-right: 0;
+          border-top: 1px solid var(--line);
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 6px;
+          padding: 12px 15px;
+        }
+        .network-info {
+          min-width: 0;
+        }
+        .metrics {
+          align-content: center;
+          border-top: 0;
+          border-left: 1px solid var(--line);
+          padding: 0 0 0 13px;
+        }
+        .network {
+          height: 80px;
+        }
+        .formula {
+          margin: 0;
+        }
+        .weight-key {
+          margin: 5px 0 0;
+          font-size: 8px;
+        }
+        .plot-pane {
+          padding: 10px 8px;
+        }
+        .plot-heading {
+          min-height: 55px;
+          align-content: flex-start;
+          gap: 3px;
+        }
+        .plot-heading strong {
+          font-size: 11px;
+        }
+        .axes select {
+          width: 36px;
+          font-size: 9px;
+        }
+        .mini-button {
+          font-size: 9px;
+          padding: 3px 5px;
+        }
+        canvas.scatter {
+          height: 190px;
+        }
+        .plot-foot {
+          font-size: 8px;
+        }
+        .interaction-hint {
+          font-size: 8px;
+        }
+        .panel-bottom {
+          padding: 12px 14px;
+        }
+        .transport {
+          gap: 6px;
+        }
+        .transport button {
+          font-size: 11px;
+          padding: 7px 9px;
+        }
+        button.primary {
+          min-width: 100px;
+        }
+        .speed {
+          margin-left: auto;
+        }
+        .step-counter {
+          width: 100%;
+          margin: 2px 0 0;
+          text-align: right;
+        }
+        .history-area {
+          grid-template-columns: 1fr;
+        }
+        .history-note {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          font-size: 9px;
+        }
+        .export {
+          margin: 0;
+        }
+        #experiments {
+          gap: 20px;
+        }
+        .replay-row {
+          gap: 7px;
+        }
+        .replay-row label {
+          font-size: 9px;
+        }
+      }
+      @media (max-width: 370px) {
+        .plots {
+          grid-template-columns: 1fr;
+        }
+        .input-pane,
+        .latent-pane,
+        .network-pane {
+          grid-column: 1;
+        }
+        .plot-heading {
+          min-height: 28px;
+          align-items: center;
+        }
+        canvas.scatter {
+          height: 235px;
+        }
+        .panel-head {
+          padding: 12px;
+        }
+        .status {
+          font-size: 9px;
+        }
+      }
+      /* Single experiment, graphic controls, and a larger editable network. */
+      .shell {
+        max-width: 1480px;
+      }
+      .panel-title h2 {
+        font-size: 16px;
+      }
+      .badge {
+        display: none;
+      }
+      .settings {
+        padding: 20px 23px;
+      }
+      .dataset-row {
+        display: block;
+      }
+      .dataset-caption {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 650;
+      }
+      .dataset-tabs {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .dataset-tab {
+        min-width: 0;
+        padding: 9px 5px;
+      }
+      .dataset-tab svg {
+        width: 65px;
+        height: 39px;
+      }
+      .data-note {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+        min-height: 18px;
+      }
+      .model-controls {
+        display: grid;
+        grid-template-columns: 1fr 1.15fr 1fr;
+        gap: 18px;
+        padding-top: 17px;
+        margin-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      .choice-label {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 650;
+        margin-bottom: 7px;
+      }
+      .choice-group {
+        display: flex;
+        gap: 7px;
+      }
+      .graphic-button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        flex: 1;
+        min-width: 0;
+        padding: 9px 7px;
+        font-size: 11px;
+      }
+      .graphic-button svg {
+        width: 60px;
+        height: 32px;
+        display: block;
+      }
+      .graphic-button[aria-pressed="true"],
+      .width-button[aria-pressed="true"] {
+        background: var(--soft);
+        border-color: var(--purple);
+        color: var(--purple);
+      }
+      .activation-controls {
+        grid-column: 1/3;
+      }
+      .activation-controls .choice-group {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+      }
+      .activation-controls .graphic-button svg {
+        width: 68px;
+        height: 35px;
+      }
+      .width-controls .choice-group {
+        margin-bottom: 8px;
+      }
+      .width-button {
+        flex: 1;
+        white-space: nowrap;
+        font:
+          12px ui-monospace,
+          monospace;
+        padding: 8px 5px;
+      }
+      .width-manual {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .width-manual input {
+        width: 66px;
+        text-align: center;
+      }
+      .width-manual input[type="range"] {
+        flex: 1;
+        min-width: 30px;
+      }
+      .settings-note {
+        font-size: 10px;
+        color: var(--muted);
+        margin: 12px 0 0;
+      }
+      .control-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        max-width: none;
+        margin-top: 17px;
+      }
+      .plots {
+        grid-template-columns: minmax(0, 1fr) 360px minmax(0, 1fr);
+      }
+      .network-pane {
+        padding: 13px 12px;
+      }
+      .network {
+        height: 300px;
+      }
+      .network-info {
+        min-width: 0;
+      }
+      .network circle.neuron {
+        transition:
+          fill 0.12s,
+          stroke-width 0.12s;
+      }
+      .network .editable {
+        cursor: pointer;
+      }
+      .network .editable:hover circle {
+        fill: #e0d4ff;
+        stroke-width: 3;
+      }
+      .network .editable:focus-visible {
+        outline: none;
+      }
+      .network .editable:focus-visible circle {
+        stroke: #252b3b;
+        stroke-width: 3;
+      }
+      .network text {
+        pointer-events: none;
+      }
+      .network .add-node circle {
+        stroke-dasharray: 4 3;
+      }
+      .network-help {
+        font-size: 10px;
+        text-align: center;
+        color: var(--muted);
+        margin: 5px 0 10px;
+      }
+      .network-shape {
+        font-size: 11px;
+      }
+      .formula {
+        margin-bottom: 8px;
+      }
+      .weight-key {
+        margin-bottom: 7px;
+      }
+      .metrics {
+        padding: 10px 8px 0;
+      }
+      .metric-label {
+        font-size: 10px;
+      }
+      .metric-value {
+        font-size: 23px;
+      }
+      .plot-pane {
+        display: flex;
+        flex-direction: column;
+      }
+      .scatter {
+        flex: 1;
+        min-height: 340px;
+      }
+      .plot-heading {
+        flex-wrap: wrap;
+      }
+      .plot-foot {
+        margin-top: auto;
+      }
+      .history-area {
+        grid-template-columns: 1fr 240px;
+      }
+      .loss {
+        height: 80px;
+      }
+      .landscape-section {
+        border-top: 1px solid var(--line);
+        padding: 23px;
+        background: #fcfcfe;
+      }
+      .landscape-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .landscape-heading h3 {
+        font-size: 17px;
+        margin: 0;
+      }
+      .landscape-heading .tag {
+        font-size: 11px;
+      }
+      .landscape-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 290px;
+        gap: 23px;
+        margin-top: 16px;
+      }
+      .landscape-view {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #f8f7fc;
+        overflow: hidden;
+      }
+      .landscape-canvas {
+        width: 100%;
+        height: 400px;
+        display: block;
+        touch-action: none;
+      }
+      .landscape-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+        min-width: 0;
+      }
+      .landscape-controls label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .landscape-controls select {
+        margin-top: 4px;
+        font:
+          11px ui-monospace,
+          monospace;
+      }
+      .landscape-summary {
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 12px;
+        background: white;
+      }
+      .landscape-summary strong {
+        display: block;
+        font:
+          600 23px ui-monospace,
+          monospace;
+        margin-top: 4px;
+        color: var(--ink);
+      }
+      .landscape-summary span {
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .landscape-note {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.8;
+        margin: 0;
+      }
+      .landscape-legend {
+        display: flex;
+        gap: 12px;
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 7px;
+      }
+      .landscape-legend span::before {
+        content: "";
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: #fff;
+        border: 2px solid #263348;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+      .landscape-legend span:nth-child(2)::before {
+        border-color: #d64d83;
+        background: #d64d83;
+      }
+      .landscape-progress {
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--purple);
+      }
+      @media (max-width: 1150px) {
+        .plots {
+          grid-template-columns: minmax(0, 1fr) 290px minmax(0, 1fr);
+        }
+        .graphic-button {
+          font-size: 10px;
+        }
+        .network {
+          height: 270px;
+        }
+        .dataset-tab {
+          font-size: 11px;
+        }
+        .landscape-layout {
+          grid-template-columns: minmax(0, 1fr) 240px;
+        }
+        .scatter {
+          min-height: 320px;
+        }
+      }
+      @media (max-width: 800px) {
+        .dataset-tabs {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .model-controls {
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+        }
+        .width-controls {
+          grid-column: 1/-1;
+          grid-row: 3;
+        }
+        .activation-controls {
+          grid-column: 1/-1;
+          grid-row: 4;
+        }
+        .optimizer-controls {
+          grid-column: 1/-1;
+          grid-row: 2;
+        }
+        .optimizer-controls .choice-group {
+          max-width: 360px;
+        }
+        .plots {
+          grid-template-columns: 1fr 1fr;
+        }
+        .network-pane {
+          grid-column: 1/-1;
+          order: 3;
+          display: grid;
+          grid-template-columns: 1fr 220px;
+          border: 0;
+          border-top: 1px solid var(--line);
+          padding: 16px 24px;
+        }
+        .input-pane {
+          order: 1;
+        }
+        .latent-pane {
+          order: 2;
+        }
+        .network-info {
+          min-width: 0;
+        }
+        .network {
+          height: 280px;
+        }
+        .metrics {
+          border-top: 0;
+          border-left: 1px solid var(--line);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 20px;
+          padding-left: 24px;
+        }
+        .network-help {
+          max-width: 400px;
+          margin: 5px auto 10px;
+        }
+        .scatter {
+          min-height: 260px;
+        }
+        .landscape-layout {
+          grid-template-columns: 1fr;
+        }
+        .landscape-controls {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .landscape-note {
+          grid-column: 1/-1;
+        }
+        .landscape-summary {
+          grid-column: 2;
+          grid-row: 2/4;
+        }
+        .landscape-canvas {
+          height: 360px;
+        }
+      }
+      @media (max-width: 480px) {
+        .settings {
+          padding: 15px;
+        }
+        .model-controls {
+          gap: 11px;
+        }
+        .choice-group {
+          gap: 5px;
+        }
+        .graphic-button {
+          padding: 7px 3px;
+          font-size: 10px;
+        }
+        .graphic-button svg {
+          width: 50px;
+          height: 29px;
+        }
+        .activation-controls .choice-group {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .activation-controls .graphic-button svg {
+          width: 67px;
+          height: 35px;
+        }
+        .dataset-tab svg {
+          width: 53px;
+          height: 32px;
+        }
+        .control-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+        .network-pane {
+          grid-template-columns: 1fr;
+          padding: 14px;
+        }
+        .network {
+          height: 300px;
+        }
+        .metrics {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          padding: 12px 16px 0;
+        }
+        .plots {
+          grid-template-columns: 1fr;
+        }
+        .plot-pane {
+          grid-column: 1;
+        }
+        .scatter {
+          min-height: 250px;
+        }
+        .input-pane {
+          border-bottom: 1px solid var(--line);
+        }
+        .plot-heading {
+          min-height: 28px;
+        }
+        .landscape-section {
+          padding: 16px 12px;
+        }
+        .landscape-heading {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 5px;
+        }
+        .landscape-canvas {
+          height: 310px;
+        }
+        .landscape-controls {
+          grid-template-columns: 1fr;
+        }
+        .landscape-note,
+        .landscape-summary {
+          grid-column: 1;
+          grid-row: auto;
+        }
+        .history-area {
+          grid-template-columns: 1fr;
+        }
+        .panel-head {
+          padding: 15px;
+        }
+        .panel-title h2 {
+          font-size: 14px;
+        }
+        .dataset-tab {
+          font-size: 10px;
+        }
+        .width-manual {
+          gap: 5px;
+        }
+        .width-manual input {
+          width: 55px;
+        }
+      }
+      .landscape-color-scale {
+        min-width: 0;
+      }
+      .landscape-color-scale > div {
+        height: 9px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #2d2556, #5a5296, #4494a4, #9aceb8, #f6e7b6);
+      }
+      .landscape-color-scale > p {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: var(--muted);
+        margin: 4px 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>Enable JavaScript to run this experiment. 이 실험에는 JavaScript가 필요합니다.</noscript>
+    <main class="shell">
+      <header>
+        <h1>2 layer MLP with simple data</h1>
+        <button id="language" aria-label="한국어로 전환">한국어</button>
+      </header>
+      <div id="experiments"></div>
+    </main>
+    <div id="tooltip" hidden></div>
+    <script id="mlp-core">
+      // Dependency-free numerical core. All randomness is explicit and reproducible.
+      const MLPCore = (() => {
+        function rng(seed) {
+          let a = seed >>> 0;
+          return () => {
+            a += 0x6d2b79f5;
+            let t = a;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        function normal(random) {
+          return Math.sqrt(-2 * Math.log(Math.max(1e-12, random()))) * Math.cos(2 * Math.PI * random());
+        }
+        function shuffle(a, random) {
+          for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+          }
+          return a;
+        }
+        function dataset(kind, d, n, noise, seed) {
+          if (["hopf", "swiss", "scurve"].includes(kind)) d = 3;
+          const random = rng(seed),
+            k = kind === "clusters" ? 3 : 2,
+            points = [];
+          for (let i = 0; i < n; i++) {
+            const label = i % k,
+              t = random() * 2 * Math.PI;
+            let x;
+            if (kind === "clusters") {
+              const a = (label * 2 * Math.PI) / 3;
+              x = [1.25 * Math.cos(a), 1.25 * Math.sin(a), [-0.7, 0.7, 0][label]];
+            } else if (kind === "circles") {
+              const r = label === 0 ? 1.25 : 0.55;
+              x = [r * Math.cos(t), r * Math.sin(t), label === 0 ? -0.35 : 0.35];
+            } else if (kind === "spiral") {
+              const u = 0.05 + 0.95 * random(),
+                a = u * 3 * Math.PI + label * Math.PI;
+              x = [1.4 * u * Math.cos(a), 1.4 * u * Math.sin(a), 1.4 * (u - 0.5)];
+            } else if (kind === "moons") {
+              const angle = random() * Math.PI;
+              x =
+                label === 0
+                  ? [Math.cos(angle), Math.sin(angle), normal(random) * 0.25]
+                  : [1 - Math.cos(angle), 0.5 - Math.sin(angle), normal(random) * 0.25];
+            } else if (kind === "xor") {
+              const sign = random() < 0.5 ? -1 : 1;
+              x = [sign, label === 0 ? sign : -sign, normal(random) * 0.35];
+            } else if (kind === "swiss") {
+              const u = (label + random()) / 2,
+                angle = 1.5 * Math.PI * (1 + 2 * u);
+              x = [(angle * Math.cos(angle)) / 8, random() * 2 - 1, (angle * Math.sin(angle)) / 8];
+            } else if (kind === "scurve") {
+              const u = (label + random()) / 2,
+                angle = 3 * Math.PI * (u - 0.5);
+              x = [Math.sin(angle), random() * 2 - 1, Math.sign(angle) * (Math.cos(angle) - 1)];
+            } else x = label === 0 ? [Math.cos(t), Math.sin(t), 0] : [1 + Math.cos(t), 0, Math.sin(t)];
+            x = x.slice(0, d).map((v) => v + normal(random) * (noise + (kind === "clusters" ? 0.12 : kind === "xor" ? 0.16 : 0)));
+            points.push({ id: i, x, label, train: true });
+          }
+          // Stratification preserves every class in both splits, even on small datasets.
+          for (let c = 0; c < k; c++) {
+            const group = shuffle(
+              points.filter((p) => p.label === c),
+              random
+            );
+            group.slice(Math.floor(group.length * 0.8)).forEach((p) => (p.train = false));
+          }
+          const train = points.filter((p) => p.train),
+            mean = Array(d).fill(0),
+            scale = Array(d).fill(0);
+          train.forEach((p) => p.x.forEach((v, j) => (mean[j] += v / train.length)));
+          train.forEach((p) => p.x.forEach((v, j) => (scale[j] += (v - mean[j]) ** 2 / train.length)));
+          for (let j = 0; j < d; j++) scale[j] = Math.sqrt(scale[j]) || 1;
+          points.forEach((p) => {
+            p.raw = p.x.slice();
+            p.x = p.x.map((v, j) => (v - mean[j]) / scale[j]);
+          });
+          return { points, train, validation: points.filter((p) => !p.train), d, k, mean, scale };
+        }
+        // Standard tanh approximation to GELU; backward differentiates this same approximation.
+        function gelu(x) {
+          return 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * x ** 3)));
+        }
+        function geluDerivative(x) {
+          const c = Math.sqrt(2 / Math.PI),
+            u = Math.tanh(c * (x + 0.044715 * x ** 3));
+          return 0.5 * (1 + u) + 0.5 * x * (1 - u * u) * c * (1 + 3 * 0.044715 * x * x);
+        }
+        function activate(x, kind) {
+          if (kind === "tanh") return Math.tanh(x);
+          if (kind === "relu") return Math.max(0, x);
+          if (kind === "gelu") return gelu(x);
+          if (kind === "leaky") return x >= 0 ? x : 0.1 * x;
+          if (kind === "sigmoid") {
+            const exp = Math.exp(-Math.abs(x));
+            return x >= 0 ? 1 / (1 + exp) : exp / (1 + exp);
+          }
+          return x;
+        }
+        function derivative(x, z, kind) {
+          if (kind === "tanh") return 1 - z * z;
+          if (kind === "relu") return x > 0 ? 1 : 0;
+          if (kind === "gelu") return geluDerivative(x);
+          if (kind === "leaky") return x >= 0 ? 1 : 0.1;
+          if (kind === "sigmoid") return z * (1 - z);
+          return 1;
+        }
+        class Model {
+          constructor(d, h, k, objective, activation, seed) {
+            Object.assign(this, { d, h, k, objective, activation, t: 0 });
+            this.o = objective === "reconstruction" ? d : k;
+            const random = rng(seed),
+              init = (a, b) => Float64Array.from({ length: a * b }, () => (random() * 2 - 1) * Math.sqrt(6 / (a + b)));
+            this.w1 = init(d, h);
+            this.b1 = new Float64Array(h);
+            this.w2 = init(h, this.o);
+            this.b2 = new Float64Array(this.o);
+            this.params = [this.w1, this.b1, this.w2, this.b2];
+            this.m = this.params.map((p) => new Float64Array(p.length));
+            this.v = this.params.map((p) => new Float64Array(p.length));
+          }
+          forward(x) {
+            const pre = new Float64Array(this.h),
+              z = new Float64Array(this.h),
+              y = new Float64Array(this.o);
+            for (let j = 0; j < this.h; j++) {
+              let a = this.b1[j];
+              for (let i = 0; i < this.d; i++) a += x[i] * this.w1[i * this.h + j];
+              pre[j] = a;
+              z[j] = activate(a, this.activation);
+            }
+            for (let q = 0; q < this.o; q++) {
+              y[q] = this.b2[q];
+              for (let j = 0; j < this.h; j++) y[q] += z[j] * this.w2[j * this.o + q];
+            }
+            const logits = y.slice();
+            if (this.objective === "classification") {
+              const max = Math.max(...y);
+              let sum = 0;
+              for (let q = 0; q < this.o; q++) {
+                y[q] = Math.exp(y[q] - max);
+                sum += y[q];
+              }
+              for (let q = 0; q < this.o; q++) y[q] /= sum;
+            }
+            return { pre, z, y, logits };
+          }
+          loss(point, result = this.forward(point.x)) {
+            if (this.objective === "reconstruction") return result.y.reduce((s, v, q) => s + (v - point.x[q]) ** 2, 0) / this.d;
+            const max = Math.max(...result.logits);
+            return max + Math.log(result.logits.reduce((s, v) => s + Math.exp(v - max), 0)) - result.logits[point.label];
+          }
+          gradients(batch) {
+            const g = this.params.map((p) => new Float64Array(p.length));
+            for (const p of batch) {
+              const { pre, z, y } = this.forward(p.x),
+                dy = new Float64Array(this.o);
+              for (let q = 0; q < this.o; q++)
+                dy[q] = (this.objective === "reconstruction" ? (2 * (y[q] - p.x[q])) / this.d : y[q] - (q === p.label ? 1 : 0)) / batch.length;
+              for (let j = 0; j < this.h; j++) {
+                let dz = 0;
+                for (let q = 0; q < this.o; q++) {
+                  g[2][j * this.o + q] += z[j] * dy[q];
+                  dz += this.w2[j * this.o + q] * dy[q];
+                }
+                const da = dz * derivative(pre[j], z[j], this.activation);
+                g[1][j] += da;
+                for (let i = 0; i < this.d; i++) g[0][i * this.h + j] += p.x[i] * da;
+              }
+              for (let q = 0; q < this.o; q++) g[3][q] += dy[q];
+            }
+            return g;
+          }
+          trainStep(batch, lr, optimizer = "adam") {
+            const g = this.gradients(batch);
+            this.t++;
+            if (optimizer === "sgd") {
+              this.params.forEach((p, l) => {
+                for (let i = 0; i < p.length; i++) p[i] -= lr * g[l][i];
+              });
+              return;
+            }
+            const bc1 = 1 - 0.9 ** this.t,
+              bc2 = 1 - 0.999 ** this.t;
+            this.params.forEach((p, l) => {
+              for (let i = 0; i < p.length; i++) {
+                const grad = g[l][i];
+                this.m[l][i] = 0.9 * this.m[l][i] + 0.1 * grad;
+                this.v[l][i] = 0.999 * this.v[l][i] + 0.001 * grad * grad;
+                p[i] -= (lr * (this.m[l][i] / bc1)) / (Math.sqrt(this.v[l][i] / bc2) + 1e-8);
+              }
+            });
+          }
+          evaluate(points) {
+            let loss = 0,
+              correct = 0;
+            for (const p of points) {
+              const r = this.forward(p.x);
+              loss += this.loss(p, r);
+              if (this.objective === "classification" && r.y.indexOf(Math.max(...r.y)) === p.label) correct++;
+            }
+            return { loss: loss / points.length, accuracy: correct / points.length };
+          }
+          snapshot(data) {
+            return {
+              latents: data.points.map((p) => Array.from(this.forward(p.x).z)),
+              train: this.evaluate(data.train),
+              validation: this.evaluate(data.validation),
+              weights: this.params.map((p) => Array.from(p)),
+            };
+          }
+        }
+        const MAX_STEPS = 2000;
+        class Experiment {
+          constructor(objective, widthIndex, config = {}) {
+            this.objective = objective;
+            this.widthIndex = widthIndex;
+            this.reset({
+              kind: "clusters",
+              d: 2,
+              n: 480,
+              noise: 0.08,
+              activation: "tanh",
+              optimizer: "adam",
+              objective,
+              widthIndex,
+              h: null,
+              lr: 0.01,
+              seed: 42,
+              ...config,
+            });
+          }
+          reset(config = this.config) {
+            this.config = { ...config, d: ["hopf", "swiss", "scurve"].includes(config.kind) ? 3 : config.d };
+            this.objective = this.config.objective ?? this.objective;
+            this.widthIndex = this.config.widthIndex ?? this.widthIndex;
+            if (this.config.h !== null && this.config.h !== undefined) this.config.h = Math.max(1, Math.min(12, Math.round(this.config.h) || 1));
+            const c = this.config;
+            this.data = dataset(c.kind, c.d, c.n, c.noise, c.seed);
+            this.model = new Model(
+              this.data.d,
+              c.h ?? this.data.d + this.widthIndex - 1,
+              this.data.k,
+              this.objective,
+              c.activation,
+              c.seed + 100 + this.widthIndex * 31
+            );
+            this.random = rng(c.seed + 9109);
+            this.step = 0;
+            this.shown = 0;
+            this.history = [];
+            this.running = false;
+            this.replaying = false;
+            this.failed = false;
+            this.record();
+          }
+          record() {
+            if (this.history.at(-1)?.step !== this.step) {
+              const model = this.model.snapshot(this.data);
+              if (
+                !Number.isFinite(model.train.loss) ||
+                !Number.isFinite(model.validation.loss) ||
+                model.latents.some((p) => p.some((v) => !Number.isFinite(v)))
+              ) {
+                this.running = false;
+                this.replaying = false;
+                this.failed = true;
+                return;
+              }
+              this.history.push({ step: this.step, model });
+            }
+            this.shown = this.history.length - 1;
+          }
+          trainOne() {
+            if (this.step >= MAX_STEPS || this.failed) return;
+            const batch = Array.from({ length: 32 }, () => this.data.train[Math.floor(this.random() * this.data.train.length)]);
+            this.model.trainStep(batch, this.config.lr, this.config.optimizer);
+            this.step++;
+            if (this.step % 10 === 0) this.record();
+            if (this.step >= MAX_STEPS) this.running = false;
+          }
+          start() {
+            if (this.step >= MAX_STEPS || this.failed) return;
+            this.replaying = false;
+            this.shown = this.history.length - 1;
+            this.running = true;
+          }
+          pause() {
+            this.running = false;
+            this.replaying = false;
+            this.record();
+          }
+          singleStep() {
+            this.pause();
+            this.trainOne();
+            this.record();
+          }
+          seek(index) {
+            this.pause();
+            this.shown = Math.max(0, Math.min(this.history.length - 1, index));
+          }
+          startReplay() {
+            const previous = this.shown;
+            this.pause();
+            if (this.history.length < 2) return;
+            this.shown = previous >= this.history.length - 1 ? 0 : previous;
+            this.replaying = true;
+          }
+          replayTick() {
+            if (!this.replaying) return;
+            this.shown = Math.min(this.shown + 1, this.history.length - 1);
+            if (this.shown === this.history.length - 1) this.replaying = false;
+          }
+        }
+        function parameterRefs(model) {
+          const refs = [];
+          for (let i = 0; i < model.d; i++)
+            for (let j = 0; j < model.h; j++) refs.push({ group: 0, index: i * model.h + j, label: `W₁[x${i + 1}→h${j + 1}]` });
+          for (let j = 0; j < model.h; j++) refs.push({ group: 1, index: j, label: `b₁[h${j + 1}]` });
+          for (let j = 0; j < model.h; j++)
+            for (let k = 0; k < model.o; k++) refs.push({ group: 2, index: j * model.o + k, label: `W₂[h${j + 1}→o${k + 1}]` });
+          for (let k = 0; k < model.o; k++) refs.push({ group: 3, index: k, label: `b₂[o${k + 1}]` });
+          return refs;
+        }
+        // Evaluates a real two-parameter slice on a detached model; training weights are never modified.
+        function sliceGrid({ model: spec, points, axisA, axisB, bounds, resolution = 33 }) {
+          const model = new Model(spec.d, spec.h, spec.k, spec.objective, spec.activation, 1);
+          model.params.forEach((p, i) => p.set(spec.weights[i]));
+          const refs = parameterRefs(model),
+            a = refs[axisA],
+            b = refs[axisB];
+          if (!a || !b || axisA === axisB) throw new Error("Choose two distinct parameters.");
+          const current = [model.params[a.group][a.index], model.params[b.group][b.index]],
+            currentLoss = model.evaluate(points).loss;
+          const values = new Float64Array(resolution * resolution);
+          let min = Infinity,
+            max = -Infinity;
+          for (let y = 0; y < resolution; y++)
+            for (let x = 0; x < resolution; x++) {
+              model.params[a.group][a.index] = bounds[0] + (x / (resolution - 1)) * (bounds[1] - bounds[0]);
+              model.params[b.group][b.index] = bounds[2] + (y / (resolution - 1)) * (bounds[3] - bounds[2]);
+              const loss = model.evaluate(points).loss;
+              if (!Number.isFinite(loss)) throw new Error("Non-finite landscape.");
+              values[y * resolution + x] = loss;
+              min = Math.min(min, loss);
+              max = Math.max(max, loss);
+            }
+          return { values, resolution, bounds, min, max, current, currentLoss };
+        }
+        // Marching squares with interpolated crossings and a center-value saddle decision.
+        function contourSegments(values, n, level) {
+          const segments = [];
+          for (let y = 0; y < n - 1; y++)
+            for (let x = 0; x < n - 1; x++) {
+              const p = [
+                  [x, y],
+                  [x + 1, y],
+                  [x + 1, y + 1],
+                  [x, y + 1],
+                ],
+                v = [values[y * n + x], values[y * n + x + 1], values[(y + 1) * n + x + 1], values[(y + 1) * n + x]];
+              const crossings = [];
+              for (let edge = 0; edge < 4; edge++) {
+                const next = (edge + 1) % 4;
+                if (v[edge] > level !== v[next] > level) {
+                  const f = (level - v[edge]) / (v[next] - v[edge]);
+                  crossings.push({ edge, p: [p[edge][0] + f * (p[next][0] - p[edge][0]), p[edge][1] + f * (p[next][1] - p[edge][1])] });
+                }
+              }
+              if (crossings.length === 2) segments.push([crossings[0].p, crossings[1].p]);
+              else if (crossings.length === 4) {
+                const same = v[0] > level === v.reduce((a, b) => a + b, 0) / 4 > level;
+                const pairs = same
+                  ? [
+                      [0, 1],
+                      [2, 3],
+                    ]
+                  : [
+                      [0, 3],
+                      [1, 2],
+                    ];
+                for (const [a, b] of pairs) segments.push([crossings[a].p, crossings[b].p]);
+              }
+            }
+          return segments;
+        }
+        return { rng, dataset, Model, Experiment, MAX_STEPS, activate, derivative, parameterRefs, sliceGrid, contourSegments };
+      })();
+    </script>
+    <script id="mlp-ui">
+      (() => {
+        "use strict";
+        const $ = (id) => document.getElementById(id),
+          colors = ["#7454d4", "#de7841", "#269a92"];
+        const datasetIcons = {
+          clusters: `<svg viewBox="0 0 70 36" aria-hidden="true" focusable="false"><g fill="#7454d4"><circle cx="14" cy="12" r="3"/><circle cx="20" cy="8" r="2"/><circle cx="20" cy="17" r="3"/><circle cx="10" cy="19" r="2"/></g><g fill="#de7841"><circle cx="49" cy="11" r="3"/><circle cx="56" cy="16" r="2"/><circle cx="58" cy="8" r="3"/><circle cx="45" cy="18" r="2"/></g><g fill="#269a92"><circle cx="33" cy="26" r="3"/><circle cx="39" cy="30" r="2"/><circle cx="27" cy="31" r="2"/></g></svg>`,
+          circles: `<svg viewBox="0 0 70 36" fill="none" stroke-width="3" stroke-dasharray="1 5" stroke-linecap="round" aria-hidden="true" focusable="false"><ellipse cx="35" cy="18" rx="22" ry="15" stroke="#7454d4"/><ellipse cx="35" cy="18" rx="10" ry="7" stroke="#de7841"/></svg>`,
+          spiral: `<svg viewBox="0 0 70 36" fill="none" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M35 18 C43 8 53 22 40 28 S9 22 15 9 S51 -1 59 17" stroke="#7454d4"/><path d="M35 18 C27 28 17 14 30 8 S61 14 55 27 S19 37 11 19" stroke="#de7841"/></svg>`,
+          hopf: `<svg viewBox="0 0 70 36" fill="none" stroke-width="3" aria-hidden="true" focusable="false"><ellipse cx="26" cy="15" rx="17" ry="10" stroke="#7454d4" transform="rotate(-25 26 15)"/><ellipse cx="44" cy="22" rx="17" ry="10" stroke="#de7841" transform="rotate(-25 44 22)"/><path d="M23 25 L30 24" stroke="#7454d4"/></svg>`,
+        };
+        const datasetNames = ["clusters", "circles", "spiral", "hopf", "moons", "xor", "swiss", "scurve"];
+        const threeDimensional = (kind) => ["hopf", "swiss", "scurve"].includes(kind);
+        for (const kind of ["moons", "xor", "swiss", "scurve"]) {
+          const sample = MLPCore.dataset(kind, threeDimensional(kind) ? 3 : 2, 72, 0.025, 31);
+          const dots = sample.points
+            .map((p) => {
+              const [x, y, z = 0] = p.x;
+              const px = threeDimensional(kind) ? 35 + 13 * x : 35 + 11 * x;
+              const py = threeDimensional(kind) ? 19 - 9 * z : 19 - 9 * y;
+              return `<circle cx="${px}" cy="${py}" r="1.2" fill="${colors[p.label]}"/>`;
+            })
+            .join("");
+          datasetIcons[kind] = `<svg viewBox="0 0 70 38" aria-hidden="true" focusable="false">${dots}</svg>`;
+        }
+        const graphicIcons = {
+          d2: '<path d="M15 28 V5 M15 28 H54"/><path d="M12 9 L15 5 L18 9 M50 25 L54 28 L50 31"/><text x="55" y="31">x</text><text x="19" y="9">y</text>',
+          d3: '<path d="M30 22 V3 M30 22 L8 31 M30 22 L52 31"/><text x="32" y="8">z</text><text x="3" y="28">y</text><text x="55" y="31">x</text>',
+          reconstruction:
+            '<circle cx="10" cy="10" r="3"/><circle cx="17" cy="24" r="3"/><path d="M26 17 H42 M37 12 L42 17 L37 22"/><circle cx="51" cy="10" r="3"/><circle cx="58" cy="24" r="3"/>',
+          classification:
+            '<circle cx="11" cy="10" r="3"/><circle cx="19" cy="23" r="3"/><circle cx="50" cy="9" r="3" stroke="#de7841"/><circle cx="58" cy="24" r="3" stroke="#de7841"/><path d="M40 2 L29 32" stroke-dasharray="3 3"/>',
+          adam: '<path d="M5 4 C45 4 14 15 37 20 S46 25 58 29"/><circle cx="58" cy="29" r="2"/>',
+          sgd: '<path d="M5 4 L49 8 L18 13 L45 17 L31 21 L46 25 L42 29"/><circle cx="42" cy="29" r="2"/>',
+        };
+        const icon = (key) =>
+          `<svg viewBox="0 0 68 36" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" focusable="false"><g>${graphicIcons[
+            key
+          ].replaceAll("<text", '<text stroke="none" fill="currentColor" font-size="9"')}</g></svg>`;
+        function activationIcon(kind) {
+          const origin = kind === "sigmoid" ? 31 : ["tanh", "linear"].includes(kind) ? 18 : 28;
+          const scale = kind === "sigmoid" ? 26 : kind === "tanh" ? 13 : kind === "linear" ? 5 : 8;
+          let path = "";
+          for (let i = 0; i <= 60; i++) {
+            const x = -3 + i / 10,
+              y = MLPCore.activate(x, kind),
+              px = 6 + i * 0.92,
+              py = origin - y * scale;
+            path += (i ? "L" : "M") + px.toFixed(2) + " " + py.toFixed(2) + " ";
+          }
+          return `<svg viewBox="0 0 68 36" aria-hidden="true" focusable="false"><path d="M5 ${origin} H64 M34 3 V33" fill="none" stroke="#c7c3d5" stroke-width=".8"/><path d="${path}" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
+        }
+        const copy = {
+          en: {
+            reconstruction: "Reconstruction",
+            classification: "Classification",
+            bottleneck: "Bottleneck",
+            matched: "Matched width",
+            expanded: "Expanded width",
+            dataset: "Dataset",
+            clusters: "Clusters",
+            circles: "Circles",
+            spiral: "Spirals",
+            hopf: "Hopf link",
+            dimension: "Input dimensions",
+            samples: "Data points",
+            activation: "Hidden activation",
+            gelu: "GeLU (tanh approx.)",
+            linear: "Linear",
+            noise: "Noise σ",
+            lr: "Learning rate",
+            seed: "Random seed",
+            inputSpace: "Input",
+            latent: "Hidden activations",
+            fit: "Fit",
+            viewReset: "Reset view",
+            gestures: "Drag to rotate / pan · Scroll to zoom",
+            keyboard: "Arrow keys: rotate/pan; +/−: zoom; 0: reset",
+            projection: "Selected axes · not the full 4D space",
+            coordinates: "Actual hidden coordinates",
+            train: "Training",
+            validation: "Validation",
+            class: "Class",
+            split: "Filled: training · Hollow: validation",
+            trainMSE: "Training MSE",
+            valMSE: "Validation MSE",
+            valAcc: "Validation accuracy",
+            valCE: "Validation CE",
+            error: "Error rate",
+            inputLabel: "Input",
+            hiddenLabel: "Hidden",
+            outputLabel: "Output",
+            weights: "Purple: + · Orange: − · Dashed: landscape axes",
+            params: "parameters",
+            run: "▶ Train",
+            resume: "▶ Resume",
+            pause: "Ⅱ Pause",
+            stepOnce: "+1 step",
+            reset: "↺ Reset",
+            speed: "Speed",
+            ready: "Ready",
+            running: "Training",
+            paused: "Paused",
+            complete: "Complete",
+            history: "Viewing history",
+            replaying: "Replaying",
+            replay: "▷ Replay",
+            stopReplay: "Ⅱ Pause replay",
+            timeline: "Training timeline",
+            latest: "Latest",
+            timelineNote: "Snapshots every 10 steps. Training resumes from the latest weights.",
+            export: "↓ Export JSON",
+            failed: "Numerical error. Lower the learning rate or reset.",
+            hopfOnly: "Hopf link uses 3D input.",
+            loss: "Loss",
+          },
+          ko: {
+            reconstruction: "재구성",
+            classification: "분류",
+            bottleneck: "좁은 은닉층",
+            matched: "같은 크기",
+            expanded: "넓은 은닉층",
+            dataset: "데이터셋",
+            clusters: "군집",
+            circles: "동심원",
+            spiral: "나선",
+            hopf: "Hopf link",
+            dimension: "입력 차원",
+            samples: "데이터 수",
+            activation: "은닉 활성화 함수",
+            gelu: "GeLU (tanh 근사)",
+            linear: "선형",
+            noise: "노이즈 σ",
+            lr: "학습률",
+            seed: "랜덤 시드",
+            inputSpace: "입력",
+            latent: "은닉 활성화",
+            fit: "화면 맞춤",
+            viewReset: "시점 초기화",
+            gestures: "드래그 회전/이동 · 스크롤 확대",
+            keyboard: "방향키: 회전/이동; +/−: 확대/축소; 0: 초기화",
+            projection: "선택한 축 · 전체 4D 공간 아님",
+            coordinates: "실제 은닉 좌표",
+            train: "학습",
+            validation: "검증",
+            class: "클래스",
+            split: "채운 점: 학습 · 빈 점: 검증",
+            trainMSE: "학습 MSE",
+            valMSE: "검증 MSE",
+            valAcc: "검증 정확도",
+            valCE: "검증 교차 엔트로피",
+            error: "오분류율",
+            inputLabel: "입력",
+            hiddenLabel: "은닉",
+            outputLabel: "출력",
+            weights: "보라: 양수 · 주황: 음수 · 점선: 지형 축",
+            params: "파라미터",
+            run: "▶ 학습",
+            resume: "▶ 계속 학습",
+            pause: "Ⅱ 일시정지",
+            stepOnce: "+1 step",
+            reset: "↺ 초기화",
+            speed: "속도",
+            ready: "준비됨",
+            running: "학습 중",
+            paused: "일시정지",
+            complete: "완료",
+            history: "과거 기록",
+            replaying: "재생 중",
+            replay: "▷ 기록 재생",
+            stopReplay: "Ⅱ 재생 정지",
+            timeline: "학습 타임라인",
+            latest: "최신으로",
+            timelineNote: "10 step마다 기록합니다. 학습은 최신 가중치에서 계속됩니다.",
+            export: "↓ JSON 저장",
+            failed: "수치 오류가 발생했습니다. 학습률을 낮추거나 초기화하세요.",
+            hopfOnly: "Hopf link는 3D 입력을 사용합니다.",
+            loss: "손실",
+          },
+        };
+        Object.assign(copy.en, {
+          twoD: "2D",
+          threeD: "3D",
+          tanh: "tanh",
+          relu: "ReLU",
+          adam: "Adam",
+          sgd: "SGD",
+          objective: "Objective",
+          optimizer: "Optimizer",
+          hiddenWidth: "Hidden dimension",
+          widthCustom: "Neurons",
+          leaky: "Leaky ReLU",
+          sigmoid: "Sigmoid",
+          geluShort: "GeLU",
+          geluHint: "GeLU uses the tanh approximation.",
+          moons: "Two moons",
+          xor: "XOR",
+          swiss: "Swiss roll",
+          scurve: "S-curve",
+          threeDOnly: "This dataset requires 3D input.",
+          modelSettings: "Model configuration",
+          resetHint: "Changing data, architecture, objective, activation or optimizer resets training.",
+          networkHelp: "Click a hidden neuron to remove it; click + to add one. Changes restart training.",
+          addNeuron: "Add hidden neuron",
+          removeNeuron: "Remove hidden neuron",
+          neuronLimit: "1–12 hidden neurons",
+          projection: "Selected neuron axes · not the full hidden space",
+          landscape: "Loss landscape",
+          slice: "Two-weight slice",
+          sliceX: "Horizontal weight",
+          sliceY: "Vertical weight",
+          sliceFit: "Fit trajectory",
+          sliceLoss: "Loss at the white marker",
+          sliceComputing: "Computing slice…",
+          sliceUnavailable: "Landscape could not be computed. Training remains available.",
+          sliceCurrent: "Current checkpoint",
+          slicePath: "Projected training path",
+          sliceNote:
+            "Only the two selected weights vary. All other parameters are fixed at the displayed step. The path shows their recorded coordinates; earlier points are not earlier loss surfaces. Colors use log(1 + loss).",
+          sliceSample: "Fixed, class-balanced training subset",
+          sliceGesture: "Scroll to zoom · Hover to inspect loss",
+          sliceView: "Contour heatmap with the projected optimization path",
+          sliceRange: "Contour loss range",
+          lowLoss: "Lower loss",
+          highLoss: "Higher loss",
+          sliceStep: "Surface step",
+          dataNotes: {
+            clusters: "Three Gaussian clusters.",
+            circles: "Two concentric circles; in 3D the rings have different heights.",
+            spiral: "Two interleaving spiral arms.",
+            hopf: "Two rings linked once. Each ring is a class; 3D input.",
+            moons: "Two interleaving half-circles. In 3D, depth is independent noise.",
+            xor: "Four Gaussian clusters with diagonally matching labels (XOR).",
+            swiss: "A rolled sheet in 3D. Classes split the roll parameter into two halves.",
+            scurve: "An S-shaped sheet in 3D. Classes split the curve parameter into two halves.",
+          },
+        });
+        Object.assign(copy.ko, {
+          twoD: "2D",
+          threeD: "3D",
+          tanh: "tanh",
+          relu: "ReLU",
+          adam: "Adam",
+          sgd: "SGD",
+          objective: "학습 목표",
+          optimizer: "옵티마이저",
+          hiddenWidth: "은닉 차원",
+          widthCustom: "뉴런 수",
+          leaky: "Leaky ReLU",
+          sigmoid: "Sigmoid",
+          geluShort: "GeLU",
+          geluHint: "GeLU는 tanh 근사를 사용합니다.",
+          moons: "초승달",
+          xor: "XOR",
+          swiss: "스위스 롤",
+          scurve: "S 곡면",
+          threeDOnly: "이 데이터셋은 3D 입력을 사용합니다.",
+          modelSettings: "모델 설정",
+          resetHint: "데이터·구조·목표·활성화 함수·옵티마이저를 바꾸면 학습이 초기화됩니다.",
+          networkHelp: "은닉 뉴런을 누르면 제거하고, +를 누르면 추가합니다. 변경 시 학습을 다시 시작합니다.",
+          addNeuron: "은닉 뉴런 추가",
+          removeNeuron: "은닉 뉴런 제거",
+          neuronLimit: "은닉 뉴런 1–12개",
+          projection: "선택한 뉴런 축 · 전체 은닉 공간 아님",
+          landscape: "손실 지형",
+          slice: "두 가중치 단면",
+          sliceX: "가로축 가중치",
+          sliceY: "세로축 가중치",
+          sliceFit: "학습 경로에 맞춤",
+          sliceLoss: "흰색 마커 위치의 손실",
+          sliceComputing: "단면 계산 중…",
+          sliceUnavailable: "손실 지형을 계산하지 못했습니다. 학습은 계속 사용할 수 있습니다.",
+          sliceCurrent: "현재 체크포인트",
+          slicePath: "투영된 학습 경로",
+          sliceNote:
+            "선택한 두 가중치만 변화시키고 나머지는 표시된 step의 값으로 고정합니다. 경로는 두 가중치의 과거 좌표이며, 과거 지형을 나타내지 않습니다. 색은 log(1 + loss) 기준입니다.",
+          sliceSample: "클래스 균형을 맞춘 고정 학습 표본",
+          sliceGesture: "스크롤 확대 · 마우스로 손실 확인",
+          sliceView: "등고선과 투영된 학습 경로를 표시한 손실 히트맵",
+          sliceRange: "등고선 손실 범위",
+          lowLoss: "낮은 손실",
+          highLoss: "높은 손실",
+          sliceStep: "지형 step",
+          dataNotes: {
+            clusters: "세 개의 Gaussian 군집입니다.",
+            circles: "동심원 두 개입니다. 3D에서는 두 고리의 높이가 다릅니다.",
+            spiral: "서로 감긴 두 팔의 나선입니다.",
+            hopf: "한 번 연결된 두 고리입니다. 각 고리가 한 클래스이며 3D 입력을 사용합니다.",
+            moons: "서로 맞물린 두 반원입니다. 3D의 깊이에는 독립적인 노이즈를 더합니다.",
+            xor: "대각선 방향의 군집끼리 같은 레이블을 갖는 네 Gaussian 군집입니다.",
+            swiss: "3D에서 말린 곡면입니다. 펼친 방향의 매개변수를 절반씩 나누어 두 클래스를 정합니다.",
+            scurve: "3D의 S자 곡면입니다. 곡선 매개변수를 절반씩 나누어 두 클래스를 정합니다.",
+          },
+        });
+        // Every visit starts in English; switching languages never resets any experiment.
+        let lang = "en";
+        const t = (key) => copy[lang][key];
+        function canvasSize(canvas) {
+          const r = canvas.getBoundingClientRect(),
+            dpr = Math.min(devicePixelRatio || 1, 2),
+            w = Math.max(1, r.width),
+            h = Math.max(1, r.height);
+          if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+            canvas.width = Math.round(w * dpr);
+            canvas.height = Math.round(h * dpr);
+          }
+          const ctx = canvas.getContext("2d");
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, w, h);
+          return { ctx, w, h };
+        }
+        class Scatter {
+          constructor(canvas, panel, input = false) {
+            this.canvas = canvas;
+            this.input = input;
+            this.panel = panel;
+            this.axes = [0, 1, 2];
+            this.reset();
+            this.screen = [];
+            this.pointers = new Map();
+            canvas.addEventListener(
+              "wheel",
+              (e) => {
+                e.preventDefault();
+                this.zoom = Math.max(0.25, Math.min(8, this.zoom * Math.exp(-e.deltaY * 0.001)));
+                this.panel.dirty = true;
+              },
+              { passive: false }
+            );
+            canvas.addEventListener("pointerdown", (e) => {
+              canvas.setPointerCapture(e.pointerId);
+              this.pointers.set(e.pointerId, [e.clientX, e.clientY]);
+              this.panel.hoverId = -1;
+              $("tooltip").hidden = true;
+            });
+            canvas.addEventListener("pointermove", (e) => this.move(e));
+            const release = (e) => {
+              this.pointers.delete(e.pointerId);
+            };
+            canvas.addEventListener("pointerup", release);
+            canvas.addEventListener("pointercancel", release);
+            canvas.addEventListener("lostpointercapture", release);
+            canvas.addEventListener("pointerleave", () => {
+              this.panel.hoverId = -1;
+              $("tooltip").hidden = true;
+              this.panel.dirty = true;
+            });
+            canvas.addEventListener("dblclick", () => this.reset());
+            canvas.addEventListener("keydown", (e) => {
+              if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "+", "=", "-", "0"].includes(e.key)) return;
+              e.preventDefault();
+              const dx = e.key === "ArrowLeft" ? -10 : e.key === "ArrowRight" ? 10 : 0,
+                dy = e.key === "ArrowUp" ? -10 : e.key === "ArrowDown" ? 10 : 0;
+              if (this.dimension() >= 3) {
+                this.yaw += dx * 0.012;
+                this.pitch += dy * 0.012;
+              } else {
+                this.panX += dx;
+                this.panY += dy;
+              }
+              if (e.key === "+" || e.key === "=") this.zoom = Math.min(8, this.zoom * 1.15);
+              if (e.key === "-") this.zoom = Math.max(0.25, this.zoom / 1.15);
+              if (e.key === "0") this.reset();
+              this.panel.dirty = true;
+            });
+          }
+          dimension() {
+            return this.input ? this.panel.experiment.data.d : this.panel.experiment.model.h;
+          }
+          reset() {
+            this.yaw = 0.55;
+            this.pitch = -0.32;
+            this.zoom = 1;
+            this.panX = 0;
+            this.panY = 0;
+            this.bound = this.input ? 3.1 : this.panel.experiment.config.activation === "tanh" ? 1.1 : 3;
+            this.panel.dirty = true;
+          }
+          values() {
+            return this.input
+              ? this.panel.experiment.data.points.map((p) => p.x)
+              : this.panel.experiment.history[this.panel.experiment.shown]?.model.latents;
+          }
+          fit() {
+            const values = this.values();
+            let max = 0.1;
+            values.forEach((p) => this.axes.slice(0, Math.min(this.dimension(), 3)).forEach((a) => (max = Math.max(max, Math.abs(p[a])))));
+            this.bound = max * 1.2;
+            this.zoom = 1;
+            this.panX = this.panY = 0;
+            this.panel.dirty = true;
+          }
+          move(e) {
+            const prev = this.pointers.get(e.pointerId);
+            if (prev) {
+              if (this.pointers.size === 2) {
+                const other = [...this.pointers.entries()].find(([id]) => id !== e.pointerId)[1];
+                const oldDist = Math.hypot(prev[0] - other[0], prev[1] - other[1]),
+                  newDist = Math.hypot(e.clientX - other[0], e.clientY - other[1]);
+                if (oldDist > 0) this.zoom = Math.max(0.25, Math.min(8, (this.zoom * newDist) / oldDist));
+              } else {
+                const dx = e.clientX - prev[0],
+                  dy = e.clientY - prev[1];
+                if (this.dimension() >= 3 && !e.shiftKey) {
+                  this.yaw += dx * 0.009;
+                  this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch + dy * 0.009));
+                } else {
+                  this.panX += dx;
+                  this.panY += dy;
+                }
+              }
+              this.pointers.set(e.pointerId, [e.clientX, e.clientY]);
+              this.panel.dirty = true;
+              return;
+            }
+            const r = this.canvas.getBoundingClientRect(),
+              x = e.clientX - r.left,
+              y = e.clientY - r.top;
+            let best = null,
+              dist = 90;
+            for (const p of this.screen) {
+              const dd = (p.sx - x) ** 2 + (p.sy - y) ** 2;
+              if (dd < dist) {
+                best = p;
+                dist = dd;
+              }
+            }
+            this.panel.hoverId = best ? best.id : -1;
+            this.panel.dirty = true;
+            const tip = $("tooltip");
+            tip.hidden = !best;
+            if (best) {
+              const p = this.panel.experiment.data.points[best.id],
+                values = this.values()[best.id];
+              tip.textContent =
+                `#${p.id} · ${t("class")} ${String.fromCharCode(65 + p.label)} · ${t(p.train ? "train" : "validation")}\n` +
+                values.map((v, i) => `${this.input ? "x" : "h"}${i + 1}: ${v.toFixed(3)}`).join("  ");
+              tip.style.left = Math.min(e.clientX + 14, innerWidth - 275) + "px";
+              tip.style.top = Math.max(8, Math.min(e.clientY + 14, innerHeight - 105)) + "px";
+            }
+          }
+          draw() {
+            const values = this.values();
+            if (!values) return;
+            const { ctx, w, h } = canvasSize(this.canvas),
+              dim = this.dimension(),
+              nd = Math.min(dim, 3),
+              three = nd === 3,
+              extent = this.bound,
+              unit = ((Math.min(w, h) * 0.36) / extent) * this.zoom,
+              cx = w / 2 + this.panX,
+              cy = h / 2 + this.panY;
+            const project = (p) => {
+              let [x, y = 0, z = 0] = p;
+              if (three) {
+                const a = x * Math.cos(this.yaw) + z * Math.sin(this.yaw),
+                  b = -x * Math.sin(this.yaw) + z * Math.cos(this.yaw);
+                x = a;
+                y = y * Math.cos(this.pitch) - b * Math.sin(this.pitch);
+                z = p[1] * Math.sin(this.pitch) + b * Math.cos(this.pitch);
+              }
+              return [cx + x * unit, cy - y * unit, z];
+            };
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "#e7e6ee";
+            for (let j = -2; j <= 2; j++) {
+              if (nd > 1) {
+                let a = project([-extent, (j * extent) / 2, 0]),
+                  b = project([extent, (j * extent) / 2, 0]);
+                ctx.beginPath();
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(b[0], b[1]);
+                ctx.stroke();
+                a = project([(j * extent) / 2, -extent, 0]);
+                b = project([(j * extent) / 2, extent, 0]);
+                ctx.beginPath();
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(b[0], b[1]);
+                ctx.stroke();
+              }
+            }
+            for (let a = 0; a < nd; a++) {
+              const start = [0, 0, 0],
+                end = [0, 0, 0];
+              start[a] = -extent;
+              end[a] = extent;
+              const p = project(start),
+                q = project(end);
+              ctx.strokeStyle = "#c8c5d5";
+              ctx.beginPath();
+              ctx.moveTo(p[0], p[1]);
+              ctx.lineTo(q[0], q[1]);
+              ctx.stroke();
+              ctx.fillStyle = "#777388";
+              ctx.font = "10px ui-monospace,monospace";
+              const label = (this.input ? "x" : "h") + (this.axes[a] + 1);
+              ctx.fillText(label, Math.max(5, Math.min(w - 22, q[0] + 5)), Math.max(13, Math.min(h - 8, q[1] - 5)));
+            }
+            this.screen = values
+              .map((v, id) => {
+                const p = this.axes.slice(0, nd).map((a) => v[a]),
+                  s = project(p);
+                return { id, sx: s[0], sy: s[1], z: s[2] };
+              })
+              .sort((a, b) => a.z - b.z);
+            for (const p of this.screen) {
+              const point = this.panel.experiment.data.points[p.id],
+                active = p.id === this.panel.hoverId;
+              ctx.globalAlpha = this.panel.hoverId < 0 || active ? 0.78 : 0.25;
+              ctx.beginPath();
+              ctx.arc(p.sx, p.sy, active ? 5.5 : nd === 1 ? 3.3 : 2.8, 0, Math.PI * 2);
+              ctx.fillStyle = colors[point.label];
+              ctx.strokeStyle = colors[point.label];
+              ctx.lineWidth = active ? 2 : 1.2;
+              if (point.train) ctx.fill();
+              else {
+                ctx.fillStyle = "#fafbfc";
+                ctx.fill();
+                ctx.stroke();
+              }
+              if (active) {
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = "#20273a";
+                ctx.stroke();
+              }
+            }
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = "#9692a3";
+            ctx.font = "9px ui-monospace,monospace";
+            ctx.fillText(`±${(extent / this.zoom).toFixed(2)} · ${nd}D`, 8, h - 7);
+          }
+        }
+        const fmt = (v) => (v < 0.0001 ? v.toExponential(2) : v.toFixed(4));
+        class Landscape {
+          constructor(panel) {
+            this.panel = panel;
+            this.canvas = panel.q(".landscape-canvas");
+            this.generation = 0;
+            this.dirty = true;
+            this.lastDispatch = -Infinity;
+            panel.q(".landscape-axis-a").addEventListener("change", () => this.changeAxes("a"));
+            panel.q(".landscape-axis-b").addEventListener("change", () => this.changeAxes("b"));
+            panel.q('[data-action="landscape-fit"]').addEventListener("click", () => {
+              this.fit();
+              this.request(true);
+            });
+            this.canvas.addEventListener(
+              "wheel",
+              (event) => {
+                event.preventDefault();
+                const s = this.panel.experiment.history[this.panel.experiment.shown].model,
+                  refs = this.refs,
+                  a = refs[this.axisA],
+                  b = refs[this.axisB],
+                  x = s.weights[a.group][a.index],
+                  y = s.weights[b.group][b.index],
+                  factor = Math.exp(event.deltaY * 0.001);
+                const rx = Math.max(0.05, Math.min(30, ((this.bounds[1] - this.bounds[0]) * factor) / 2)),
+                  ry = Math.max(0.05, Math.min(30, ((this.bounds[3] - this.bounds[2]) * factor) / 2));
+                this.bounds = [x - rx, x + rx, y - ry, y + ry];
+                this.request(true);
+              },
+              { passive: false }
+            );
+            this.canvas.addEventListener("pointermove", (event) => this.hover(event));
+            this.canvas.addEventListener("pointerleave", () => ($("tooltip").hidden = true));
+            this.reset();
+          }
+          reset() {
+            this.worker?.terminate();
+            this.worker = null;
+            this.generation++;
+            this.busy = false;
+            this.pending = null;
+            this.result = null;
+            this.lastRequested = "";
+            this.error = false;
+            this.dirty = true;
+            const e = this.panel.experiment;
+            this.refs = MLPCore.parameterRefs(e.model);
+            this.points = [];
+            for (let c = 0; c < e.data.k; c++) this.points.push(...e.data.train.filter((p) => p.label === c).slice(0, Math.floor(96 / e.data.k)));
+            const gradients = e.model.gradients(this.points);
+            const strongest = (group) =>
+              this.refs.reduce(
+                (best, ref, i) =>
+                  ref.group === group && Math.abs(gradients[group][ref.index]) > best.score
+                    ? { index: i, score: Math.abs(gradients[group][ref.index]) }
+                    : best,
+                { index: 0, score: -1 }
+              ).index;
+            this.axisA = strongest(0);
+            this.axisB = strongest(2);
+            this.options();
+            this.fit();
+            try {
+              const source =
+                $("mlp-core").textContent +
+                `\nself.onmessage=event=>{const job=event.data;try{self.postMessage({generation:job.generation,step:job.step,axisA:job.axisA,axisB:job.axisB,result:MLPCore.sliceGrid(job)});}catch(error){self.postMessage({generation:job.generation,error:String(error)});}};`;
+              const url = URL.createObjectURL(new Blob([source], { type: "application/javascript" }));
+              this.worker = new Worker(url);
+              URL.revokeObjectURL(url);
+              this.worker.onmessage = (event) => this.receive(event.data);
+              this.worker.onerror = () => {
+                this.worker?.terminate();
+                this.worker = null;
+                this.busy = false;
+                this.lastRequested = "";
+                this.request(true);
+              };
+            } catch {
+              this.worker = null;
+            }
+          }
+          options() {
+            const options = this.refs.map((ref, i) => `<option value="${i}">${ref.label}</option>`).join("");
+            for (const [selector, axis] of [
+              [".landscape-axis-a", this.axisA],
+              [".landscape-axis-b", this.axisB],
+            ]) {
+              this.panel.q(selector).innerHTML = options;
+              this.panel.q(selector).value = axis;
+            }
+          }
+          changeAxes(which) {
+            const a = Number(this.panel.q(".landscape-axis-a").value),
+              b = Number(this.panel.q(".landscape-axis-b").value);
+            if (a === b) {
+              if (which === "a") this.axisB = this.axisA;
+              else this.axisA = this.axisB;
+            }
+            if (which === "a") this.axisA = a;
+            else this.axisB = b;
+            this.options();
+            this.result = null;
+            this.fit();
+            this.request(true);
+            this.panel.network(this.panel.experiment.history[this.panel.experiment.shown].model);
+          }
+          fit() {
+            const e = this.panel.experiment,
+              a = this.refs[this.axisA],
+              b = this.refs[this.axisB],
+              past = e.history.slice(0, e.shown + 1),
+              xs = past.map((s) => s.model.weights[a.group][a.index]),
+              ys = past.map((s) => s.model.weights[b.group][b.index]);
+            this.bounds = [Math.min(...xs) - 1.5, Math.max(...xs) + 1.5, Math.min(...ys) - 1.5, Math.max(...ys) + 1.5];
+          }
+          request(force = false) {
+            const e = this.panel.experiment,
+              s = e.history[e.shown],
+              m = e.model,
+              key = `${s.step}/${this.axisA}/${this.axisB}/${this.bounds.join(",")}`;
+            if (!force && key === this.lastRequested) return;
+            this.lastRequested = key;
+            const a = this.refs[this.axisA],
+              b = this.refs[this.axisB],
+              x = s.model.weights[a.group][a.index],
+              y = s.model.weights[b.group][b.index];
+            if (x < this.bounds[0] || x > this.bounds[1] || y < this.bounds[2] || y > this.bounds[3]) this.fit();
+            if (this.result && (this.result.step > s.step || this.result.axisA !== this.axisA || this.result.axisB !== this.axisB))
+              this.result = null;
+            this.pending = {
+              generation: this.generation,
+              step: s.step,
+              model: { d: m.d, h: m.h, k: m.k, objective: m.objective, activation: m.activation, weights: s.model.weights },
+              points: this.points,
+              axisA: this.axisA,
+              axisB: this.axisB,
+              bounds: this.bounds.slice(),
+              resolution: this.worker ? 33 : 17,
+            };
+            this.dirty = true;
+          }
+          tick(now) {
+            if (this.busy || !this.pending || now - this.lastDispatch < 350) return;
+            const job = this.pending;
+            this.pending = null;
+            this.busy = true;
+            this.lastDispatch = now;
+            if (this.worker) this.worker.postMessage(job);
+            else
+              setTimeout(() => {
+                try {
+                  this.receive({ generation: job.generation, step: job.step, axisA: job.axisA, axisB: job.axisB, result: MLPCore.sliceGrid(job) });
+                } catch {
+                  this.receive({ generation: job.generation, error: true });
+                }
+              }, 0);
+          }
+          receive(message) {
+            if (message.generation !== this.generation) return;
+            this.busy = false;
+            if (message.error) {
+              this.error = true;
+              this.dirty = true;
+              return;
+            }
+            const step = this.panel.experiment.history[this.panel.experiment.shown].step;
+            if (message.axisA === this.axisA && message.axisB === this.axisB && message.step <= step) {
+              this.result = { ...message.result, step: message.step, axisA: message.axisA, axisB: message.axisB };
+              this.error = false;
+              this.buildMap();
+            }
+            this.dirty = true;
+          }
+          buildMap() {
+            const r = this.result,
+              n = r.resolution;
+            this.map = document.createElement("canvas");
+            this.map.width = n;
+            this.map.height = n;
+            const ctx = this.map.getContext("2d"),
+              pixels = ctx.createImageData(n, n),
+              lo = Math.log1p(r.min),
+              range = Math.max(1e-12, Math.log1p(r.max) - lo),
+              stops = [
+                [45, 37, 86],
+                [90, 82, 150],
+                [68, 148, 164],
+                [154, 206, 184],
+                [246, 231, 182],
+              ];
+            for (let y = 0; y < n; y++)
+              for (let x = 0; x < n; x++) {
+                const value = ((Math.log1p(r.values[y * n + x]) - lo) / range) * 4,
+                  j = Math.min(3, Math.floor(value)),
+                  f = value - j,
+                  at = ((n - 1 - y) * n + x) * 4;
+                for (let k = 0; k < 3; k++) pixels.data[at + k] = stops[j][k] * (1 - f) + stops[j + 1][k] * f;
+                pixels.data[at + 3] = 255;
+              }
+            ctx.putImageData(pixels, 0, 0);
+            r.contours = [];
+            if (r.max - r.min > 1e-12)
+              for (let i = 1; i < 11; i++) {
+                const level = Math.expm1(lo + (range * i) / 11);
+                r.contours.push({ level, segments: MLPCore.contourSegments(r.values, n, level) });
+              }
+          }
+          draw() {
+            const { ctx, w, h } = canvasSize(this.canvas),
+              r = this.result;
+            this.panel.q(".landscape-canvas").setAttribute("aria-label", t("sliceView"));
+            this.panel.q(".landscape-progress").textContent = this.error
+              ? t("sliceUnavailable")
+              : this.pending || this.busy
+                ? t("sliceComputing")
+                : r
+                  ? `${t("sliceStep")} ${r.step}`
+                  : "";
+            if (!r) {
+              ctx.fillStyle = "#80778e";
+              ctx.font = "12px sans-serif";
+              ctx.fillText(t(this.error ? "sliceUnavailable" : "sliceComputing"), 24, h / 2);
+              this.dirty = false;
+              return;
+            }
+            const left = 53,
+              right = w - 23,
+              top = 18,
+              bottom = h - 52,
+              pw = right - left,
+              ph = bottom - top;
+            this.rect = { left, right, top, bottom };
+            ctx.imageSmoothingEnabled = true;
+            ctx.drawImage(this.map, left, top, pw, ph);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(left, top, pw, ph);
+            ctx.clip();
+            ctx.strokeStyle = "#ffffff80";
+            ctx.lineWidth = 0.8;
+            for (const contour of r.contours) {
+              ctx.beginPath();
+              for (const [a, b] of contour.segments) {
+                ctx.moveTo(left + (a[0] / (r.resolution - 1)) * pw, bottom - (a[1] / (r.resolution - 1)) * ph);
+                ctx.lineTo(left + (b[0] / (r.resolution - 1)) * pw, bottom - (b[1] / (r.resolution - 1)) * ph);
+              }
+              ctx.stroke();
+            }
+            const project = (x, y) => [
+                left + ((x - r.bounds[0]) / (r.bounds[1] - r.bounds[0])) * pw,
+                bottom - ((y - r.bounds[2]) / (r.bounds[3] - r.bounds[2])) * ph,
+              ],
+              e = this.panel.experiment,
+              a = this.refs[r.axisA],
+              b = this.refs[r.axisB],
+              path = e.history.filter((s) => s.step <= r.step);
+            ctx.beginPath();
+            path.forEach((s, i) => {
+              const p = project(s.model.weights[a.group][a.index], s.model.weights[b.group][b.index]);
+              i ? ctx.lineTo(...p) : ctx.moveTo(...p);
+            });
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = "#ff72ae";
+            ctx.stroke();
+            if (path.length) {
+              const initial = project(path[0].model.weights[a.group][a.index], path[0].model.weights[b.group][b.index]);
+              ctx.fillStyle = "#ff72ae";
+              ctx.fillRect(initial[0] - 3, initial[1] - 3, 6, 6);
+            }
+            const current = project(...r.current);
+            ctx.beginPath();
+            ctx.arc(...current, 6, 0, Math.PI * 2);
+            ctx.fillStyle = "white";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#263348";
+            ctx.stroke();
+            ctx.restore();
+            ctx.font = "10px ui-monospace,monospace";
+            ctx.fillStyle = "#797386";
+            for (let i = 0; i <= 4; i++) {
+              const x = left + (pw * i) / 4,
+                y = bottom - (ph * i) / 4;
+              ctx.textAlign = "center";
+              ctx.fillText((r.bounds[0] + ((r.bounds[1] - r.bounds[0]) * i) / 4).toFixed(1), x, bottom + 16);
+              ctx.textAlign = "right";
+              ctx.fillText((r.bounds[2] + ((r.bounds[3] - r.bounds[2]) * i) / 4).toFixed(1), left - 7, y + 3);
+            }
+            ctx.textAlign = "center";
+            ctx.fillText(this.refs[r.axisA].label, left + pw / 2, h - 10);
+            ctx.save();
+            ctx.translate(13, top + ph / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(this.refs[r.axisB].label, 0, 0);
+            ctx.restore();
+            ctx.textAlign = "left";
+            this.panel.q(".landscape-value").textContent = fmt(r.currentLoss);
+            this.panel.q(".landscape-sample").textContent = `${t("sliceSample")}: ${this.points.length} · ${t("sliceStep")} ${r.step}`;
+            this.panel.q(".landscape-range").textContent = `${t("sliceRange")}: ${fmt(r.min)} – ${fmt(r.max)}`;
+            this.dirty = false;
+          }
+          hover(event) {
+            const r = this.result,
+              rect = this.rect;
+            if (!r || !rect) return;
+            const box = this.canvas.getBoundingClientRect(),
+              x = event.clientX - box.left,
+              y = event.clientY - box.top;
+            if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+              $("tooltip").hidden = true;
+              return;
+            }
+            const ix = Math.round(((x - rect.left) / (rect.right - rect.left)) * (r.resolution - 1)),
+              iy = Math.round(((rect.bottom - y) / (rect.bottom - rect.top)) * (r.resolution - 1)),
+              tip = $("tooltip");
+            tip.hidden = false;
+            tip.textContent = `${t("sliceStep")} ${r.step}\n${this.refs[r.axisA].label}: ${(
+              r.bounds[0] +
+              (ix / (r.resolution - 1)) * (r.bounds[1] - r.bounds[0])
+            ).toFixed(3)}\n${this.refs[r.axisB].label}: ${(r.bounds[2] + (iy / (r.resolution - 1)) * (r.bounds[3] - r.bounds[2])).toFixed(3)}\n${t(
+              "loss"
+            )}: ${fmt(r.values[iy * r.resolution + ix])}`;
+            tip.style.left = Math.max(8, Math.min(event.clientX + 14, innerWidth - 275)) + "px";
+            tip.style.top = Math.max(8, Math.min(event.clientY + 14, innerHeight - 130)) + "px";
+          }
+        }
+        class Panel {
+          constructor() {
+            this.index = 0;
+            this.experiment = new MLPCore.Experiment("reconstruction", 1);
+            this.hoverId = -1;
+            this.dirty = true;
+            this.lastReplay = 0;
+            this.root = document.createElement("section");
+            this.root.className = "experiment";
+            this.root.id = "experiment-0";
+            this.root.setAttribute("aria-labelledby", "panel-title-0");
+            const choice = (field, value, label, graphic) =>
+              `<button class="graphic-button" data-choice="${field}" data-value="${value}" aria-pressed="false">${graphic}<span data-i18n="${label}"></span></button>`;
+            this.root.innerHTML = `<div class="panel-head"><div class="panel-title"><div><h2 id="panel-title-0"></h2><span class="width-label"></span></div></div><span class="status" role="status"></span></div>
+              <div class="settings"><div class="dataset-row"><span class="dataset-caption" data-i18n="dataset"></span><div class="dataset-tabs">${datasetNames
+                .map(
+                  (kind) =>
+                    `<button class="dataset-tab" data-dataset="${kind}" aria-pressed="false">${datasetIcons[kind]}<span data-i18n="${kind}"></span></button>`
+                )
+                .join("")}</div><p class="data-note"></p></div>
+              <div class="model-controls">
+                <div class="dimension-controls"><span class="choice-label" data-i18n="dimension"></span><div class="choice-group">${choice(
+                  "d",
+                  2,
+                  "twoD",
+                  icon("d2")
+                )}${choice("d", 3, "threeD", icon("d3"))}</div></div>
+                <div class="objective-controls"><span class="choice-label" data-i18n="objective"></span><div class="choice-group">${choice(
+                  "objective",
+                  "reconstruction",
+                  "reconstruction",
+                  icon("reconstruction")
+                )}${choice("objective", "classification", "classification", icon("classification"))}</div></div>
+                <div class="width-controls"><span class="choice-label" data-i18n="hiddenWidth"></span><div class="choice-group">${[
+                  "d − 1",
+                  "d",
+                  "d + 1",
+                ]
+                  .map((name, i) => `<button class="width-button" data-width="${i}" aria-pressed="false">${name}</button>`)
+                  .join(
+                    ""
+                  )}</div><label class="width-manual"><span data-i18n="widthCustom"></span><input type="number" data-control="h" min="1" max="12" step="1" value="2"/><input type="range" data-width-slider min="1" max="12" step="1" value="2"/></label></div>
+                <div class="activation-controls"><span class="choice-label" data-i18n="activation"></span><div class="choice-group">${[
+                  "tanh",
+                  "relu",
+                  "gelu",
+                  "leaky",
+                  "sigmoid",
+                  "linear",
+                ]
+                  .map((kind) => choice("activation", kind, kind === "gelu" ? "geluShort" : kind, activationIcon(kind)))
+                  .join("")}</div></div>
+                <div class="optimizer-controls"><span class="choice-label" data-i18n="optimizer"></span><div class="choice-group">${choice(
+                  "optimizer",
+                  "adam",
+                  "adam",
+                  icon("adam")
+                )}${choice("optimizer", "sgd", "sgd", icon("sgd"))}</div></div>
+              </div>
+              <div class="control-grid"><label class="control"><span data-i18n="samples"></span><select data-control="n"><option>240</option><option selected>480</option><option>900</option></select></label><label class="control"><span class="control-top"><span data-i18n="noise"></span><output class="noise-value">0.08</output></span><input data-control="noise" type="range" min="0" max="0.3" step="0.01" value="0.08"/></label><label class="control"><span data-i18n="lr"></span><select data-control="lr"><option>0.001</option><option>0.003</option><option selected>0.01</option><option>0.03</option><option>0.1</option></select></label><label class="control"><span data-i18n="seed"></span><input data-control="seed" type="number" min="1" max="999999" step="1" value="42"/></label></div><p class="settings-note" data-i18n="resetHint"></p></div>
+              <div class="plots"><div class="plot-pane input-pane"><div class="plot-heading"><strong data-i18n="inputSpace"></strong><span class="tag input-tag"></span><button class="mini-button" data-action="input-reset" data-i18n="viewReset"></button></div><canvas class="scatter input-plot" tabindex="0" role="img"></canvas><div class="plot-foot"><div class="legend"></div><span class="split-info"></span></div><p class="interaction-hint" data-i18n="gestures"></p></div>
+              <div class="network-pane"><div class="network-info"><div class="network-shape"></div><svg class="network" viewBox="0 0 400 300" role="group"></svg><p class="formula"></p><p class="weight-key" data-i18n="weights"></p><p class="network-help" data-i18n="networkHelp"></p></div><div class="metrics"></div></div>
+              <div class="plot-pane latent-pane"><div class="plot-heading"><strong data-i18n="latent"></strong><div class="plot-tools"><div class="axes"></div><button class="mini-button" data-action="fit" data-i18n="fit"></button></div></div><canvas class="scatter latent-plot" tabindex="0" role="img"></canvas><div class="plot-foot"><span class="projection-note"></span><span data-i18n="split"></span></div><p class="interaction-hint" data-i18n="gestures"></p></div></div>
+              <div class="panel-bottom"><div class="transport"><button class="primary" data-action="run"></button><button data-action="step" data-i18n="stepOnce"></button><button data-action="reset" data-i18n="reset"></button><button data-action="replay"></button><label class="speed"><span data-i18n="speed"></span><select data-control="speed"><option value="1">1×</option><option value="4" selected>4×</option><option value="12">12×</option></select></label><span class="step-counter"></span></div><div class="replay-row"><label for="timeline-0" data-i18n="timeline"></label><input id="timeline-0" class="timeline" type="range" min="0" max="0" value="0" aria-describedby="replay-note-0"/><button class="mini-button" data-action="latest" data-i18n="latest"></button></div><div class="history-area"><div><canvas class="loss" role="img"></canvas><div class="loss-key"><span data-i18n="train"></span><span data-i18n="validation"></span></div></div><div class="history-note"><span id="replay-note-0" data-i18n="timelineNote"></span><button class="mini-button export" data-action="export" data-i18n="export"></button></div></div><p class="error" role="alert"></p></div>
+              <section class="landscape-section" aria-labelledby="landscape-title"><div class="landscape-heading"><h3 id="landscape-title" data-i18n="landscape"></h3><span class="landscape-progress" role="status"></span></div><div class="landscape-layout"><div><div class="landscape-view"><canvas class="landscape-canvas" role="img"></canvas></div><div class="landscape-legend"><span data-i18n="sliceCurrent"></span><span data-i18n="slicePath"></span></div></div><div class="landscape-controls"><label><span data-i18n="sliceX"></span><select class="landscape-axis-a"></select></label><label><span data-i18n="sliceY"></span><select class="landscape-axis-b"></select></label><button class="mini-button" data-action="landscape-fit" data-i18n="sliceFit"></button><div class="landscape-summary"><span data-i18n="sliceLoss"></span><strong class="landscape-value">—</strong><span class="landscape-sample"></span></div><div class="landscape-color-scale"><div></div><p><span data-i18n="lowLoss"></span><span data-i18n="highLoss"></span></p></div><p class="landscape-note landscape-range"></p><p class="landscape-note" data-i18n="sliceNote"></p><p class="landscape-note" data-i18n="sliceGesture"></p></div></div></section>`;
+            $("experiments").append(this.root);
+            this.inputView = new Scatter(this.q(".input-plot"), this, true);
+            this.latentView = new Scatter(this.q(".latent-plot"), this);
+            this.landscape = new Landscape(this);
+            this.root.addEventListener("click", (event) => {
+              const dataset = event.target.closest("[data-dataset]"),
+                choice = event.target.closest("[data-choice]"),
+                width = event.target.closest("[data-width]"),
+                neuron = event.target.closest("[data-neuron]"),
+                button = event.target.closest("[data-action]");
+              const e = this.experiment;
+              if (dataset) {
+                if (dataset.dataset.dataset !== e.config.kind) this.reset({ ...e.config, kind: dataset.dataset.dataset });
+                return;
+              }
+              if (choice) {
+                const field = choice.dataset.choice,
+                  value = field === "d" ? Number(choice.dataset.value) : choice.dataset.value;
+                if (value !== e.config[field]) this.reset({ ...e.config, [field]: value });
+                return;
+              }
+              if (width) {
+                this.reset({ ...e.config, widthIndex: Number(width.dataset.width), h: null });
+                return;
+              }
+              if (neuron) {
+                const next = e.model.h + (neuron.dataset.neuron === "add" ? 1 : -1);
+                if (next >= 1 && next <= 12) this.reset({ ...e.config, h: next });
+                return;
+              }
+              if (!button) return;
+              switch (button.dataset.action) {
+                case "run":
+                  e.running ? e.pause() : e.start();
+                  break;
+                case "step":
+                  e.singleStep();
+                  break;
+                case "reset":
+                  this.reset();
+                  return;
+                case "replay":
+                  if (e.replaying) e.replaying = false;
+                  else {
+                    e.startReplay();
+                    this.lastReplay = performance.now();
+                  }
+                  break;
+                case "latest":
+                  e.replaying = false;
+                  e.shown = e.history.length - 1;
+                  break;
+                case "input-reset":
+                  this.inputView.reset();
+                  return;
+                case "fit":
+                  this.latentView.fit();
+                  return;
+                case "export":
+                  this.export();
+                  return;
+                case "landscape-fit":
+                  return;
+              }
+              this.render();
+            });
+            this.q(".network").addEventListener("keydown", (event) => {
+              const node = event.target.closest("[data-neuron]");
+              if (node && ["Enter", " "].includes(event.key)) {
+                event.preventDefault();
+                const delta = node.dataset.neuron === "add" ? 1 : -1,
+                  h = this.experiment.model.h + delta;
+                if (h >= 1 && h <= 12) this.reset({ ...this.experiment.config, h });
+              }
+            });
+            this.root.querySelectorAll("[data-control]").forEach((control) =>
+              control.addEventListener("change", () => {
+                const field = control.dataset.control;
+                if (field === "speed") return;
+                let value = Number(control.value);
+                if (field === "seed") value = Number.isFinite(value) ? Math.max(1, Math.min(999999, Math.round(value))) : 42;
+                if (field === "h") value = Math.max(1, Math.min(12, Math.round(value) || 1));
+                this.reset({ ...this.experiment.config, [field]: value });
+              })
+            );
+            this.q("[data-width-slider]").addEventListener("input", (event) => (this.control("h").value = event.target.value));
+            this.q("[data-width-slider]").addEventListener("change", (event) =>
+              this.reset({ ...this.experiment.config, h: Number(event.target.value) })
+            );
+            this.control("noise").addEventListener("input", () => (this.q(".noise-value").value = Number(this.control("noise").value).toFixed(2)));
+            this.q(".timeline").addEventListener("input", (event) => {
+              this.experiment.seek(Number(event.target.value));
+              this.render();
+            });
+            this.q(".axes").addEventListener("change", (event) => {
+              const a = Number(event.target.dataset.axis),
+                next = Number(event.target.value),
+                other = this.latentView.axes.indexOf(next);
+              if (other >= 0 && other !== a) {
+                this.latentView.axes[other] = this.latentView.axes[a];
+                this.q(`[data-axis="${other}"]`).value = this.latentView.axes[a];
+              }
+              this.latentView.axes[a] = next;
+              this.dirty = true;
+            });
+            new ResizeObserver(() => {
+              this.dirty = true;
+              this.landscape.dirty = true;
+            }).observe(this.root);
+            this.syncControls();
+            this.translate();
+          }
+          q(selector) {
+            return this.root.querySelector(selector);
+          }
+          control(name) {
+            return this.q(`[data-control="${name}"]`);
+          }
+          syncControls() {
+            const e = this.experiment;
+            for (const [key, value] of Object.entries(e.config)) {
+              const control = this.control(key);
+              if (control && key !== "h") control.value = value;
+            }
+            this.control("h").value = e.model.h;
+            this.q("[data-width-slider]").value = e.model.h;
+            this.q(".noise-value").value = e.config.noise.toFixed(2);
+            this.root
+              .querySelectorAll("[data-dataset]")
+              .forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.dataset === e.config.kind)));
+            this.root.querySelectorAll("[data-choice]").forEach((button) => {
+              const field = button.dataset.choice;
+              button.setAttribute("aria-pressed", String(String(e.config[field]) === button.dataset.value));
+              button.disabled = field === "d" && button.dataset.value === "2" && threeDimensional(e.config.kind);
+            });
+            this.root
+              .querySelectorAll("[data-width]")
+              .forEach((button) => button.setAttribute("aria-pressed", String(e.model.h === e.data.d + Number(button.dataset.width) - 1)));
+            this.renderAxes();
+          }
+          renderAxes() {
+            const h = this.experiment.model.h;
+            this.q(".axes").innerHTML = Array.from(
+              { length: Math.min(h, 3) },
+              (_, axis) =>
+                `<select data-axis="${axis}" aria-label="${t("latent")} ${axis + 1}">${Array.from(
+                  { length: h },
+                  (_, j) => `<option value="${j}" ${j === this.latentView.axes[axis] ? "selected" : ""}>h${j + 1}</option>`
+                ).join("")}</select>`
+            ).join("");
+          }
+          reset(config = this.experiment.config) {
+            this.experiment.reset(config);
+            this.landscape.reset();
+            this.hoverId = -1;
+            $("tooltip").hidden = true;
+            this.inputView.axes = [0, 1, 2];
+            this.latentView.axes = [0, 1, 2];
+            this.inputView.reset();
+            this.latentView.reset();
+            this.syncControls();
+            this.translate();
+          }
+          translate() {
+            const e = this.experiment,
+              m = e.model;
+            this.root.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = t(el.dataset.i18n)));
+            this.q("h2").textContent = `${t(e.objective)} · ${e.config.optimizer.toUpperCase()}`;
+            this.q(".width-label").textContent = `d = ${m.d} · h = ${m.h} · ${m.d} → ${m.h} → ${m.o}`;
+            this.q(".input-tag").textContent = `${e.data.d}D · N = ${e.data.points.length}`;
+            this.q(".legend").innerHTML = Array.from(
+              { length: e.data.k },
+              (_, i) => `<span><i class="dot" style="background:${colors[i]}"></i>${String.fromCharCode(65 + i)}</span>`
+            ).join("");
+            this.q(".split-info").textContent = `${t("train")} ${e.data.train.length} / ${t("validation")} ${e.data.validation.length}`;
+            this.q(".projection-note").textContent = t(m.h > 3 ? "projection" : "coordinates");
+            this.q(".data-note").textContent = copy[lang].dataNotes[e.config.kind];
+            this.q('[data-choice="d"][data-value="2"]').title = threeDimensional(e.config.kind) ? t("threeDOnly") : "";
+            this.q('[data-choice="activation"][data-value="gelu"]').title = t("geluHint");
+            this.q("[data-width-slider]").setAttribute("aria-label", t("hiddenWidth"));
+            this.q(".landscape-axis-a").setAttribute("aria-label", t("sliceX"));
+            this.q(".landscape-axis-b").setAttribute("aria-label", t("sliceY"));
+            this.landscape.dirty = true;
+            this.renderAxes();
+            for (const [selector, key] of [
+              [".input-plot", "inputSpace"],
+              [".latent-plot", "latent"],
+            ])
+              this.q(selector).setAttribute("aria-label", `${t(e.objective)} ${m.d} → ${m.h} · ${t(key)}. ${t("keyboard")}`);
+            this.q(".loss").setAttribute("aria-label", `${t(e.objective)} · ${t("loss")}`);
+            this.render();
+          }
+          render() {
+            const e = this.experiment,
+              s = e.history[e.shown].model,
+              m = e.model;
+            this.q(".timeline").max = e.history.length - 1;
+            this.q(".timeline").value = e.shown;
+            this.q(".step-counter").textContent = `STEP ${String(e.history[e.shown].step).padStart(4, "0")} / ${MLPCore.MAX_STEPS}`;
+            this.q(".status").textContent = t(
+              e.running
+                ? "running"
+                : e.replaying
+                  ? "replaying"
+                  : e.history[e.shown].step < e.step
+                    ? "history"
+                    : e.step >= MLPCore.MAX_STEPS
+                      ? "complete"
+                      : e.step
+                        ? "paused"
+                        : "ready"
+            );
+            const run = this.q('[data-action="run"]');
+            run.textContent = t(e.running ? "pause" : e.step >= MLPCore.MAX_STEPS ? "complete" : e.step ? "resume" : "run");
+            run.disabled = e.step >= MLPCore.MAX_STEPS || e.failed;
+            this.q('[data-action="step"]').disabled = e.running || e.replaying || e.step >= MLPCore.MAX_STEPS || e.failed;
+            this.q('[data-action="replay"]').disabled = e.history.length < 2;
+            this.q('[data-action="replay"]').textContent = t(e.replaying ? "stopReplay" : "replay");
+            this.q(".error").textContent = e.failed ? t("failed") : "";
+            this.q(".metrics").innerHTML =
+              m.objective === "reconstruction"
+                ? `<div><div class="metric-label">${t("trainMSE")}</div><div class="metric-value">${fmt(
+                    s.train.loss
+                  )}</div></div><div><div class="metric-label">${t("valMSE")}</div><div class="metric-value">${fmt(s.validation.loss)}</div></div>`
+                : `<div><div class="metric-label">${t("valAcc")}</div><div class="metric-value">${(s.validation.accuracy * 100).toFixed(
+                    1
+                  )}%</div><div class="metric-sub">${t("error")} ${((1 - s.validation.accuracy) * 100).toFixed(
+                    1
+                  )}%</div></div><div><div class="metric-label">${t("valCE")}</div><div class="metric-value">${fmt(
+                    s.validation.loss
+                  )}</div><div class="metric-sub">${t("train")} ${(s.train.accuracy * 100).toFixed(1)}% · CE ${fmt(s.train.loss)}</div></div>`;
+            if (m.activation !== "tanh") {
+              let max = 0;
+              for (const p of s.latents) for (const v of p) max = Math.max(max, Math.abs(v));
+              this.latentView.bound = Math.max(this.latentView.bound, Math.ceil(max * 1.1));
+            }
+            this.network(s);
+            this.landscape.request();
+            this.dirty = true;
+          }
+          network(snapshot) {
+            const m = this.experiment.model,
+              xs = [48, 200, 352],
+              ns = [m.d, m.h, m.o],
+              pos = (l, j) => [xs[l], 35 + ((j + 1) * 220) / (ns[l] + 1)],
+              refs = this.landscape?.refs || [],
+              selected = [this.landscape?.axisA, this.landscape?.axisB].map((i) => refs[i]);
+            let svg = "";
+            for (let l = 0; l < 2; l++)
+              for (let a = 0; a < ns[l]; a++)
+                for (let b = 0; b < ns[l + 1]; b++) {
+                  const index = a * ns[l + 1] + b,
+                    w = snapshot.weights[l * 2][index],
+                    p = pos(l, a),
+                    q = pos(l + 1, b),
+                    chosen = selected.some((ref) => ref?.group === l * 2 && ref.index === index);
+                  svg += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${w >= 0 ? colors[0] : colors[1]}" stroke-opacity="${
+                    chosen ? 0.85 : Math.min(0.7, 0.15 + Math.abs(w) * 0.25)
+                  }" stroke-width="${chosen ? 3 : Math.min(3, 0.65 + Math.abs(w) * 0.8)}" ${chosen ? 'stroke-dasharray="5 3"' : ""}/>`;
+                }
+            ns.forEach((n, l) => {
+              for (let j = 0; j < n; j++) {
+                const p = pos(l, j),
+                  editable = l === 1 && m.h > 1,
+                  r = l === 1 && n > 8 ? 7 : 11;
+                svg += `<g ${
+                  editable ? `class="editable" data-neuron="remove" role="button" tabindex="0" aria-label="${t("removeNeuron")} h${j + 1}"` : ""
+                }><circle class="neuron" cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${l === 1 ? "#eae3fb" : "white"}" stroke="${
+                  l === 1 ? colors[0] : "#8791a6"
+                }" stroke-width="1.7"/><text x="${p[0]}" y="${p[1] + 3}" text-anchor="middle" fill="#645679" font-size="${r < 10 ? 7 : 9}">${
+                  j + 1
+                }</text>${editable ? `<title>${t("removeNeuron")} h${j + 1}</title>` : ""}</g>`;
+              }
+              svg += `<text x="${xs[l]}" y="292" text-anchor="middle" fill="#78808f" font-size="12" font-family="sans-serif">${t(
+                ["inputLabel", "hiddenLabel", "outputLabel"][l]
+              )} ${n}</text>`;
+            });
+            if (m.h < 12)
+              svg += `<g class="editable add-node" data-neuron="add" role="button" tabindex="0" aria-label="${t(
+                "addNeuron"
+              )}"><circle cx="200" cy="18" r="12" fill="white" stroke="${
+                colors[0]
+              }" stroke-width="1.5"/><text x="200" y="23" text-anchor="middle" fill="${colors[0]}" font-size="20">+</text><title>${t(
+                "addNeuron"
+              )}</title></g>`;
+            this.q(".network").innerHTML = svg;
+            this.q(".network").setAttribute("aria-label", `${m.d} → ${m.h} → ${m.o}. ${t("networkHelp")}`);
+            this.q(".network-shape").textContent = `${m.d} → ${m.h} → ${m.o} · ${m.params.reduce((s, p) => s + p.length, 0)} ${t("params")}`;
+            this.q(".formula").textContent = `z = ${m.activation}(W₁x + b₁)`;
+          }
+          drawLoss() {
+            const e = this.experiment,
+              { ctx, w, h } = canvasSize(this.q(".loss")),
+              past = e.history.slice(0, e.shown + 1),
+              max = Math.max(0.0001, ...past.flatMap((s) => [s.model.train.loss, s.model.validation.loss])) * 1.08,
+              end = Math.max(10, past.at(-1).step),
+              left = 42,
+              right = w - 8,
+              top = 8,
+              bottom = h - 15;
+            ctx.font = "8px ui-monospace,monospace";
+            ctx.fillStyle = "#9394a0";
+            ctx.fillText(max.toFixed(2), 0, top + 4);
+            ctx.fillText("0", 28, bottom + 2);
+            ctx.fillText("0", left, bottom + 12);
+            ctx.fillText(String(end), right - 22, bottom + 12);
+            ctx.strokeStyle = "#edecf2";
+            ctx.beginPath();
+            ctx.moveTo(left, top);
+            ctx.lineTo(left, bottom);
+            ctx.lineTo(right, bottom);
+            ctx.stroke();
+            ["train", "validation"].forEach((split, j) => {
+              ctx.strokeStyle = j ? colors[1] : colors[0];
+              ctx.lineWidth = 1.7;
+              ctx.setLineDash(j ? [4, 3] : []);
+              ctx.beginPath();
+              past.forEach((s, n) => {
+                const x = left + ((right - left) * s.step) / end,
+                  y = bottom - ((bottom - top) * s.model[split].loss) / max;
+                if (n) ctx.lineTo(x, y);
+                else ctx.moveTo(x, y);
+              });
+              ctx.stroke();
+              ctx.setLineDash([]);
+            });
+          }
+          export() {
+            const e = this.experiment,
+              m = e.model,
+              out = {
+                version: 3,
+                panel: this.index + 1,
+                config: e.config,
+                objective: e.objective,
+                width: m.h,
+                optimizer:
+                  e.config.optimizer === "adam"
+                    ? { name: "Adam", beta1: 0.9, beta2: 0.999, epsilon: 1e-8, batch: 32 }
+                    : { name: "SGD", momentum: 0, batch: 32 },
+                landscape: {
+                  axisA: this.landscape.refs[this.landscape.axisA],
+                  axisB: this.landscape.refs[this.landscape.axisB],
+                  subsetIds: this.landscape.points.map((p) => p.id),
+                  bounds: this.landscape.bounds,
+                },
+                normalization: { mean: e.data.mean, scale: e.data.scale },
+                data: e.data.points,
+                viewedStep: e.history[e.shown].step,
+                latestStep: e.step,
+                model: { d: m.d, h: m.h, o: m.o, objective: m.objective, activation: m.activation, weights: m.params.map((p) => Array.from(p)) },
+                viewedLatents: e.history[e.shown].model.latents,
+                history: e.history.map((s) => ({
+                  step: s.step,
+                  model: { train: s.model.train, validation: s.model.validation, weights: s.model.weights },
+                })),
+              };
+            const url = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: "application/json" })),
+              a = document.createElement("a");
+            a.href = url;
+            a.download = `mlp-panel-${this.index + 1}-${e.config.kind}-step${e.step}.json`;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }
+          draw() {
+            this.inputView.draw();
+            this.latentView.draw();
+            this.drawLoss();
+            this.dirty = false;
+          }
+        }
+        const panels = [new Panel()];
+        $("language").addEventListener("click", () => {
+          lang = lang === "en" ? "ko" : "en";
+          document.documentElement.lang = lang;
+          $("language").textContent = lang === "en" ? "한국어" : "English";
+          $("language").setAttribute("aria-label", lang === "en" ? "한국어로 전환" : "Switch to English");
+          panels.forEach((p) => p.translate());
+          $("tooltip").hidden = true;
+        });
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden)
+            panels.forEach((p) => {
+              if (p.experiment.running) {
+                p.experiment.pause();
+                p.render();
+              } else if (p.experiment.replaying) {
+                p.experiment.replaying = false;
+                p.render();
+              }
+            });
+        });
+        // A shared frame budget keeps controls responsive; state and training remain panel-local.
+        let first = 0;
+        function frame(now) {
+          const start = performance.now();
+          for (let offset = 0; offset < panels.length; offset++) {
+            const panel = panels[(first + offset) % panels.length],
+              e = panel.experiment;
+            if (e.running) {
+              const previous = e.history.length;
+              for (let j = 0; j < Number(panel.control("speed").value) && e.running; j++) {
+                if (performance.now() - start > 12) break;
+                e.trainOne();
+              }
+              if (e.history.length !== previous || !e.running) panel.render();
+            } else if (e.replaying && now - panel.lastReplay >= 100) {
+              e.replayTick();
+              panel.lastReplay = now;
+              panel.render();
+            }
+          }
+          first = (first + 1) % panels.length;
+          panels.forEach((panel) => {
+            if (panel.dirty) panel.draw();
+            panel.landscape.tick(now);
+            if (panel.landscape.dirty) panel.landscape.draw();
+          });
+          requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>
