@@ -234,5 +234,148 @@ for (const segment of contours) for (const [x, y] of segment) assert.ok(Math.abs
 assert.equal(core.contourSegments([0, 0, 0, 0], 2, 1).length, 0);
 assert.equal(core.contourSegments([0, 1, 1, 0], 2, 0.4).length, 2, "Saddle contour");
 console.log(
-  "PASS: SGD/Adam exact updates and training, configurable objective and 1–12 neurons, 3D datasets, loss slice correctness and immutability, interpolated contours."
+  "PASS: SGD/Adam exact updates and training, configurable objective and neuron counts, 3D datasets, loss slice correctness and immutability, interpolated contours."
 );
+
+// Backpropagation through three hidden layers, including the selected nonlinearity at every layer.
+for (const activation of ["tanh", "relu", "gelu", "leaky", "sigmoid", "linear"]) {
+  for (const objective of ["classification", "reconstruction"]) {
+    const data = core.dataset("moons", 2, 60, 0.05, 9),
+      model = new core.Model(2, 3, 2, objective, activation, 11, [3, 2]);
+    // Offset biases to avoid testing the undefined derivative at a ReLU kink.
+    model.params.forEach((p, group) => {
+      if (group % 2)
+        p.forEach((_, i) => {
+          p[i] = 0.17 + i * 0.031;
+        });
+    });
+    const batch = data.train.slice(0, 4),
+      gradients = model.gradients(batch),
+      eps = 1e-5;
+    model.params.forEach((p, l) =>
+      p.forEach((value, i) => {
+        p[i] = value + eps;
+        const plus = model.evaluate(batch).loss;
+        p[i] = value - eps;
+        const minus = model.evaluate(batch).loss;
+        p[i] = value;
+        assert.ok(Math.abs((plus - minus) / (2 * eps) - gradients[l][i]) < 3e-6, `deep ${activation}/${objective} ${l}:${i}`);
+      })
+    );
+    assert.deepEqual(Array.from(model.hiddenSizes), [3, 3, 2]);
+    assert.equal(model.snapshot(data).layerLatents.length, 3);
+  }
+}
+const deep = new core.Experiment("classification", 1, { extraHidden: [3, 4, 5], stepLimit: 10 });
+assert.equal(deep.model.hiddenSizes.length, 3, "Three hidden layer limit");
+deep.start();
+while (deep.running) deep.trainOne();
+assert.equal(deep.step, 10);
+const pack = JSON.parse(html.match(/<script id="mnist-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
+assert.equal(pack.indices.length, 1000);
+assert.equal(new Set(pack.indices).size, 1000);
+assert.equal(pack.coordinates.length, 1000);
+const png = Buffer.from(pack.image.split(",")[1], "base64");
+assert.equal(png.readUInt32BE(16), 700);
+assert.equal(png.readUInt32BE(20), 1120);
+// A deterministic test corpus checks MNIST handling without requiring a PNG decoder in Node.
+const pixels = new Uint8Array(1000 * 784);
+for (let i = 0; i < 1000; i++) pixels[i * 784 + (i % 784)] = 255;
+core.registerMnist(pixels, pack.coordinates, pack.indices);
+const mnist = core.dataset("mnist", 2, 900, 0.3, 42);
+assert.equal(mnist.d, 784);
+assert.equal(mnist.k, 10);
+assert.equal(mnist.points.length, 300);
+assert.equal(mnist.train.length, 240);
+assert.equal(mnist.validation.length, 60);
+assert.ok(mnist.points.every((p) => p.x.length === 784 && p.view.length === 3));
+const large = new core.Experiment("classification", 1, { kind: "mnist", n: 100, stepLimit: 50000 });
+assert.equal(large.model.h, 784);
+assert.equal(large.limit, 1000);
+assert.equal(large.maxHidden, 1024);
+assert.equal(large.model.m, null, "Optimizer buffers are allocated only in the training worker");
+large.reset({ ...large.config, h: 5000, extraHidden: [5000, 5000, 5000] });
+assert.equal(large.model.h, 1024);
+assert.deepEqual(Array.from(large.model.hiddenSizes), [1024, 128, 128]);
+assert.ok(large.model.params.reduce((sum, p) => sum + p.length, 0) < 2000000, "Parameter bound");
+for (let i = 0; i < 40; i++) {
+  large.history.push({ step: i + 1, model: large.history[0].model });
+  large.compactHistory();
+}
+assert.ok(large.history.length <= 8);
+assert.equal(large.history[0].step, 0);
+assert.equal(large.history.at(-1).step, 40);
+// The cached output-head landscape agrees with direct evaluation for a deep model.
+const dm = new core.Model(2, 3, 2, "classification", "tanh", 12, [4, 2]),
+  refs = core.parameterRefs(dm, true),
+  data = core.dataset("moons", 2, 60, 0.1, 42),
+  a = refs[0],
+  b = refs[1],
+  weights = dm.params.map((p) => Array.from(p));
+const sliced = core.sliceGrid({
+  model: { d: dm.d, h: dm.h, k: dm.k, objective: dm.objective, activation: dm.activation, extraHidden: [4, 2], weights },
+  points: data.train.slice(0, 10),
+  axisARef: a,
+  axisBRef: b,
+  bounds: [-1, 1, -1, 1],
+  resolution: 3,
+});
+dm.params[a.group][a.index] = 1;
+dm.params[b.group][b.index] = -1;
+assert.ok(Math.abs(sliced.values[2] - dm.evaluate(data.train.slice(0, 10)).loss) < 1e-12);
+console.log(
+  "PASS: three-layer numerical gradients, per-layer latents, configurable step limits, MNIST package and pixel handling, 784 default width, model/history caps, cached deep output-head landscape."
+);
+
+// PCA uses training rows only, with centered orthogonal components and zero padding.
+const pcaRows = [
+  [-3, 0],
+  [3, 0],
+  [0, -1],
+  [0, 1],
+  [1000, 1000],
+];
+const projected = core.latentPCA(pcaRows, [0, 1, 2, 3]);
+assert.ok(Math.abs(projected.explained[0] - 0.9) < 1e-6);
+assert.ok(Math.abs(projected.explained[1] - 0.1) < 1e-6);
+assert.ok(Math.abs(projected.scores[0][0] + 3) < 1e-5);
+assert.ok(projected.scores.every((row) => row[2] === 0));
+for (let axis = 0; axis < 2; axis++) assert.ok(Math.abs(projected.scores.slice(0, 4).reduce((sum, row) => sum + row[axis], 0)) < 1e-9);
+assert.ok(Math.abs(projected.scores.slice(0, 4).reduce((sum, row) => sum + row[0] * row[1], 0)) < 1e-8);
+assert.ok(core.latentPCA([[2], [2], [2]], [0, 1]).scores.every((row) => row.every((v) => v === 0)));
+const rankOne = core.latentPCA(
+  [
+    [1, 2, 3],
+    [-1, -2, -3],
+    [0, 0, 0],
+  ],
+  [0, 1, 2]
+);
+assert.ok(Math.abs(rankOne.explained[0] - 1) < 1e-9);
+assert.ok(rankOne.explained.slice(1).every((v) => Math.abs(v) < 1e-9));
+console.log("PASS: PCA variance ordering, centering, orthogonality, training-only fit, constant/rank-deficient activations.");
+
+// Tiny MNIST weight changes must occupy a visible fraction of the fitted viewport.
+const trajectoryRefs = [
+  { group: 0, index: 0 },
+  { group: 0, index: 1 },
+  { group: 0, index: 2 },
+  { group: 1, index: 0 },
+];
+const tinyHistory = [{ model: { weights: [[0.1, 0.2, 0.3], [0]] } }, { model: { weights: [[0.1, 0.20001, 0.30003], [10]] } }];
+const trajectory = core.trajectoryWindow(tinyHistory, trajectoryRefs);
+assert.deepEqual(Array.from(trajectory.axes), [2, 1], "Choose moving weights rather than a constant weight or bias");
+for (let axis = 0; axis < 2; axis++) {
+  const index = trajectory.axes[axis],
+    low = trajectory.bounds[2 * axis],
+    high = trajectory.bounds[2 * axis + 1];
+  const first = tinyHistory[0].model.weights[0][index],
+    last = tinyHistory[1].model.weights[0][index];
+  assert.ok(low < first && last < high);
+  assert.ok((last - first) / (high - low) > 0.2, "Small movements remain visible");
+}
+const manualTrajectory = core.trajectoryWindow(tinyHistory, trajectoryRefs, [0, 1]);
+assert.deepEqual(Array.from(manualTrajectory.axes), [0, 1]);
+assert.ok(manualTrajectory.bounds.every(Number.isFinite));
+assert.ok(manualTrajectory.bounds[1] > manualTrajectory.bounds[0], "Stationary axes retain a nonzero range");
+console.log("PASS: trajectory axis selection, adaptive tiny-motion bounds, manual axes and stationary ranges.");
