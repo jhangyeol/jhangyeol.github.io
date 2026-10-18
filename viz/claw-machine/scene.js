@@ -89,8 +89,8 @@ export function createScene(canvas) {
   pmrem.dispose();
 
   // ---- camera: first person, standing at the machine, high enough to see the whole gantry ----
-  // A lever swings the viewpoint around the machine up to ±45° so the player can judge depth
-  // (does the claw reach the back?) the way you would by stepping to a front corner.
+  // A lever swings the viewpoint around the machine up to ±90° so the player can judge depth
+  // (does the claw reach the back?) the way you would by stepping to a front corner or the side.
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 20);
   camera.layers.enable(LAYER_GLASS);
   const FRONT_POS = new THREE.Vector3(0, 1.55, 1.9);
@@ -98,10 +98,11 @@ export function createScene(canvas) {
   const PIVOT = new THREE.Vector3(0, 0, -0.05);
   // zoom: 1 = default distance, smaller = closer (scroll wheel / pinch)
   const ZOOM_MIN = 0.45;
+  const MAX_ANGLE = 90;
   const view = { angle: 0, target: 0, zoom: 1, zoomTarget: 1 };
   function placeCamera() {
     const a = (view.angle * Math.PI) / 180;
-    const k = Math.abs(view.angle) / 45;
+    const k = Math.min(1, Math.abs(view.angle) / 45); // corner framing, held from 45° on round to the side
     const off = FRONT_POS.clone()
       .sub(PIVOT)
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), a);
@@ -116,7 +117,7 @@ export function createScene(canvas) {
   }
   placeCamera();
   function setViewAngle(deg) {
-    view.target = Math.max(-45, Math.min(45, deg));
+    view.target = Math.max(-MAX_ANGLE, Math.min(MAX_ANGLE, deg));
   }
   function setZoom(z) {
     view.zoomTarget = Math.max(ZOOM_MIN, Math.min(1, z));
@@ -603,12 +604,14 @@ export function createScene(canvas) {
   const _q = new THREE.Quaternion();
   function syncClaw(sim) {
     const hp = sim.hub.translation();
+    const s = sim.clawScale; // the prong meshes are built at size 100%, about their hinge
     hub.position.set(hp.x, hp.y, hp.z);
+    hub.scale.setScalar(s);
     bridge.position.set(hp.x, railY, 0);
     trolley.position.set(hp.x, railY - 0.002, hp.z);
     reel.rotation.x = hp.y * 60; // the reel turns as the cable pays out
     const cy0 = railY - 0.03,
-      cy1 = hp.y + 0.06;
+      cy1 = hp.y + 0.06 * s;
     cable.position.set(hp.x, (cy0 + cy1) / 2, hp.z);
     cable.scale.y = Math.max(0.001, cy0 - cy1);
     sim.prongs.forEach((p, i) => {
@@ -616,6 +619,7 @@ export function createScene(canvas) {
       const q = p.body.rotation();
       prongs[i].position.set(t.x, t.y, t.z);
       prongs[i].quaternion.copy(_q.set(q.x, q.y, q.z, q.w));
+      prongs[i].scale.setScalar(s);
     });
     stick.rotation.set(-sim.input.z * 0.32, 0, -sim.input.x * 0.32);
     btn.position.y = sim.state === "drop" && sim.t < 0.35 ? -0.013 : -0.008;
@@ -629,6 +633,7 @@ export function createScene(canvas) {
     renderer,
     scene,
     camera,
+    MAX_ANGLE,
     resize,
     syncClaw,
     render,

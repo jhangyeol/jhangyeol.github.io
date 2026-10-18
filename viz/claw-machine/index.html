@@ -369,6 +369,11 @@
         font-size: 12px;
         color: var(--muted);
       }
+      .count-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
       #settings {
         display: none;
         width: min(310px, calc(100vw - 32px));
@@ -389,7 +394,7 @@
       }
       #settings label {
         display: grid;
-        grid-template-columns: 92px 1fr 28px;
+        grid-template-columns: 92px 1fr 38px;
         align-items: center;
         gap: 8px;
         font-size: 13px;
@@ -410,10 +415,14 @@
       #settings a {
         color: #9cc7ff;
       }
-      #cycle-info {
+      #cycle-info,
+      #clawSize-note {
         font-size: 12px;
         color: var(--gold);
         margin: 4px 0 8px;
+      }
+      #clawSize-note:empty {
+        display: none;
       }
       .controls {
         position: fixed;
@@ -587,7 +596,10 @@
           <img src="img/welcome.png" alt="" width="241" height="129" />
           <span>인형 추가</span>
         </button>
-        <span id="doll-count"></span>
+        <div class="count-row">
+          <button id="remove" class="ghost" title="인형 빼기 (M)">− 빼기</button>
+          <span id="doll-count"></span>
+        </div>
         <div class="row">
           <button id="quality" class="ghost"></button>
           <button id="settings-toggle" class="ghost">⚙ 운영자 설정</button>
@@ -598,6 +610,8 @@
           <label>상승 후 힘 <input id="topPower" type="range" min="1" max="48" /><output id="topPower-v"></output></label>
           <label>이동 힘 <input id="movePower" type="range" min="1" max="48" /><output id="movePower-v"></output></label>
           <label>랜덤 게임 주기 <input id="randomCycle" type="range" min="0" max="40" /><output id="randomCycle-v"></output></label>
+          <label>집게 크기 <input id="clawSize" type="range" step="5" /><output id="clawSize-v"></output></label>
+          <div id="clawSize-note"></div>
           <div id="cycle-info"></div>
           <label class="check"><input id="exitDrop" type="checkbox" /> 출구 앞에서 힘 풀기 (불법 개조 재현)</label>
           <button id="reset-settings" class="ghost">기본값으로</button>

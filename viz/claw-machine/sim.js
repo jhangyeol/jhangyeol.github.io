@@ -14,10 +14,12 @@ export const DIM = {
   chute: { x0: -0.4, x1: -0.15, z0: 0.09, z1: 0.34 },
   guardH: 0.1,
 };
+const CHUTE_MARGIN = 0.05; // a doll's radius: below the floor this close to the chute it went down the chute
 export const HUB_TOP_Y = 0.74;
-const HUB_MIN_Y = 0.19;
+const HUB_MIN_Y = 0.19; // at claw size 100%
 
-// Prong profile in (radial u, vertical y) relative to its hinge; drawn and collided identically.
+// Prong profile in (radial u, vertical y) relative to its hinge, at claw size 100%; drawn and
+// collided identically. Other sizes scale the whole claw uniformly (see ClawSim.setClawSize).
 export const HINGE_R = 0.03;
 export const HINGE_Y = -0.036;
 export const PRONG_PATH = [
@@ -29,15 +31,15 @@ export const PRONG_PATH = [
 export const PRONG_RADIUS = 0.0055;
 const PRONG_OPEN = 0.95; // rad, positive = tip swings outward
 
-// How far the open claw reaches from the hub axis in ±x and ±z, from the actual prong geometry,
-// so the gantry can stop the claw just before it touches a wall.
-function clawReach() {
+// How far the open claw of scale s reaches from the hub axis in ±x and ±z, from the actual prong
+// geometry, so the gantry can stop the claw just before it touches a wall.
+function clawReach(s) {
   const r = { x0: 0, x1: 0, z0: 0, z1: 0 };
   for (let k = 0; k < 3; k++) {
     const phi = -Math.PI / 2 + (k * 2 * Math.PI) / 3;
     for (const [u, y] of PRONG_PATH) {
       // swing the profile point open about the hinge, then out by the hinge radius
-      const radial = HINGE_R + u * Math.cos(PRONG_OPEN) - y * Math.sin(PRONG_OPEN) + PRONG_RADIUS * 1.25;
+      const radial = s * (HINGE_R + u * Math.cos(PRONG_OPEN) - y * Math.sin(PRONG_OPEN) + PRONG_RADIUS * 1.25);
       const x = Math.cos(phi) * radial,
         z = Math.sin(phi) * radial;
       r.x0 = Math.min(r.x0, x);
@@ -48,19 +50,23 @@ function clawReach() {
   }
   return r;
 }
-const REACH = clawReach();
 const WALL_GAP = 0.006;
-const HUB_RANGE = {
-  x0: -DIM.hx - REACH.x0 + WALL_GAP,
-  x1: DIM.hx - REACH.x1 - WALL_GAP,
-  z0: -DIM.hz - REACH.z0 + WALL_GAP,
-  z1: DIM.hz - REACH.z1 - WALL_GAP,
-};
+function hubRange(s) {
+  const reach = clawReach(s);
+  return {
+    x0: -DIM.hx - reach.x0 + WALL_GAP,
+    x1: DIM.hx - reach.x1 - WALL_GAP,
+    z0: -DIM.hz - reach.z0 + WALL_GAP,
+    z1: DIM.hz - reach.z1 - WALL_GAP,
+  };
+}
 // parking spot over the chute, pulled in if the chute's center is closer to a wall than the claw allows
-export const HOME = {
-  x: Math.max(HUB_RANGE.x0, (DIM.chute.x0 + DIM.chute.x1) / 2),
-  z: Math.min(HUB_RANGE.z1, (DIM.chute.z0 + DIM.chute.z1) / 2),
-};
+function homeFor(range) {
+  return {
+    x: Math.max(range.x0, (DIM.chute.x0 + DIM.chute.x1) / 2),
+    z: Math.min(range.z1, (DIM.chute.z0 + DIM.chute.z1) / 2),
+  };
+}
 const PRONG_SHUT = -0.35; // motor target past the limit so the claw keeps squeezing
 const PRONG_LIMIT = [-0.18, 1.0];
 
@@ -88,7 +94,9 @@ export const DEFAULT_SETTINGS = {
   movePower: 22, // 이동 힘
   randomCycle: 10, // 랜덤 게임 주기: 매 N번째 판은 전부 최대 힘 (0 = 끔)
   exitDrop: false, // 배출구 앞에서 힘 풀기
+  clawSize: 100, // 집게 크기 (%)
 };
+export const CLAW_SIZE_RANGE = [70, 150];
 
 function rotate(q, v) {
   // v' = q v q*, written out to avoid allocations
@@ -133,9 +141,10 @@ export class ClawSim {
     this.power = 0;
     this.input = { x: 0, z: 0 };
     this.vel = { x: 0, z: 0 };
-    this.hubPos = { x: HOME.x, y: HUB_TOP_Y, z: HOME.z };
     this.stepCount = 0;
     this.buildMachine();
+    this.applyClawSize();
+    this.hubPos = { x: this.home.x, y: HUB_TOP_Y, z: this.home.z };
     this.buildClaw();
   }
 
@@ -169,17 +178,32 @@ export class ClawSim {
     this.box((c.x0 + c.x1) / 2, -0.2, c.z0 - g, (c.x1 - c.x0) / 2, 0.2, g, 0.2);
   }
 
+  // Size-dependent limits. Torques scale with s and prong density with 1/s², so the prongs keep
+  // their mass and the same coil power gives the same squeeze at the tips at every size.
+  applyClawSize() {
+    const [lo, hi] = CLAW_SIZE_RANGE;
+    const s = Math.min(hi, Math.max(lo, this.settings.clawSize || 100)) / 100;
+    this.clawScale = s;
+    this.hubRange = hubRange(s);
+    this.home = homeFor(this.hubRange);
+    this.hubMinY = HUB_MIN_Y * s;
+    this.tauFullS = this.tauFull * s;
+    this.tauSpringS = this.tauSpring * s;
+    this.tauOpenS = TAU_OPEN * s;
+  }
+
   buildClaw() {
     const R = this.R;
     const hp = this.hubPos;
+    const s = this.clawScale;
     this.hub = this.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(hp.x, hp.y, hp.z));
-    this.world.createCollider(R.ColliderDesc.cylinder(0.03, 0.033).setCollisionGroups(groups(G_CLAW, G_DOLL)), this.hub);
+    this.world.createCollider(R.ColliderDesc.cylinder(0.03 * s, 0.033 * s).setCollisionGroups(groups(G_CLAW, G_DOLL)), this.hub);
     this.prongs = [];
     for (let k = 0; k < 3; k++) {
       const phi = -Math.PI / 2 + (k * 2 * Math.PI) / 3;
       const r = { x: Math.cos(phi), z: Math.sin(phi) };
       const axis = { x: -r.z, y: 0, z: r.x };
-      const anchor = { x: r.x * HINGE_R, y: HINGE_Y, z: r.z * HINGE_R };
+      const anchor = { x: r.x * HINGE_R * s, y: HINGE_Y * s, z: r.z * HINGE_R * s };
       const body = this.world.createRigidBody(
         R.RigidBodyDesc.dynamic()
           .setTranslation(hp.x + anchor.x, hp.y + anchor.y, hp.z + anchor.z)
@@ -189,31 +213,47 @@ export class ClawSim {
       for (let i = 0; i + 1 < PRONG_PATH.length; i++) {
         const [u0, y0] = PRONG_PATH[i];
         const [u1, y1] = PRONG_PATH[i + 1];
-        const a = { x: r.x * u0, y: y0, z: r.z * u0 };
-        const b = { x: r.x * u1, y: y1, z: r.z * u1 };
+        const a = { x: r.x * u0 * s, y: y0 * s, z: r.z * u0 * s };
+        const b = { x: r.x * u1 * s, y: y1 * s, z: r.z * u1 * s };
         const dx = b.x - a.x,
           dy = b.y - a.y,
           dz = b.z - a.z;
         const len = Math.hypot(dx, dy, dz);
         this.world.createCollider(
-          R.ColliderDesc.capsule(len / 2, PRONG_RADIUS)
+          R.ColliderDesc.capsule(len / 2, PRONG_RADIUS * s)
             .setTranslation((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
             .setRotation(quatFromY(dx / len, dy / len, dz / len))
-            .setDensity(2600)
+            .setDensity(2600 / (s * s))
             .setFriction(0.75)
             .setCollisionGroups(groups(G_CLAW, G_DOLL | G_STATIC)),
           body
         );
       }
-      body.addTorque({ x: axis.x * this.tauSpring, y: 0, z: axis.z * this.tauSpring }, false);
+      body.addTorque({ x: axis.x * this.tauSpringS, y: 0, z: axis.z * this.tauSpringS }, false);
       const joint = this.world.createImpulseJoint(R.JointData.revolute(anchor, { x: 0, y: 0, z: 0 }, axis), this.hub, body, true);
       joint.setContactsEnabled(false);
       joint.setLimits(PRONG_LIMIT[0], PRONG_LIMIT[1]);
       joint.configureMotorModel(R.MotorModel.ForceBased);
       const [tu, ty] = PRONG_PATH[PRONG_PATH.length - 1];
-      this.prongs.push({ body, joint, phi, tip: { x: r.x * tu, y: ty, z: r.z * tu } });
+      this.prongs.push({ body, joint, phi, tip: { x: r.x * tu * s, y: ty * s, z: r.z * tu * s } });
     }
-    this.setMotor(false, TAU_OPEN);
+    this.setMotor(false, this.tauOpenS);
+  }
+
+  // Resize the claw. Only between games: mid-game the change waits until the machine is idle.
+  setClawSize(pct) {
+    this.settings.clawSize = pct;
+    if (this.state === "idle" && !this.broken) this.rebuildClaw();
+    else this.clawDirty = true;
+  }
+
+  rebuildClaw() {
+    this.clawDirty = false;
+    for (const p of this.prongs) this.world.removeRigidBody(p.body); // takes its colliders and joint along
+    this.world.removeRigidBody(this.hub);
+    this.applyClawSize();
+    Object.assign(this.hubPos, { x: this.home.x, y: HUB_TOP_Y, z: this.home.z });
+    this.buildClaw();
   }
 
   setMotor(shut, tau) {
@@ -225,7 +265,7 @@ export class ClawSim {
 
   setGripPower(power) {
     this.power = power;
-    this.setMotor(true, (this.tauFull * Math.max(0, power)) / POWER_MAX);
+    this.setMotor(true, (this.tauFullS * Math.max(0, power)) / POWER_MAX);
   }
 
   // ---------- dolls ----------
@@ -326,10 +366,11 @@ export class ClawSim {
     for (const d of [...this.dolls]) this.removeDoll(d);
     // park the claw back over the chute
     const hp = this.hubPos;
-    const dx = HOME.x - hp.x,
+    const home = this.home;
+    const dx = home.x - hp.x,
       dy = HUB_TOP_Y - hp.y,
-      dz = HOME.z - hp.z;
-    Object.assign(hp, { x: HOME.x, y: HUB_TOP_Y, z: HOME.z });
+      dz = home.z - hp.z;
+    Object.assign(hp, { x: home.x, y: HUB_TOP_Y, z: home.z });
     this.hub.setTranslation(hp, true);
     for (const p of this.prongs) {
       const o = p.body.translation();
@@ -338,6 +379,7 @@ export class ClawSim {
     }
     this.broken = false;
     this.go("idle");
+    if (this.clawDirty) this.rebuildClaw();
   }
 
   // ---------- game flow ----------
@@ -360,7 +402,8 @@ export class ClawSim {
     this.state = state;
     this.t = 0;
     this.events.push({ type: "state", state });
-    if (state === "drop" || state === "release" || state === "idle") this.setMotor(false, TAU_OPEN);
+    if (state === "drop" || state === "release" || state === "idle") this.setMotor(false, this.tauOpenS);
+    if (state === "idle" && this.clawDirty && !this.broken) this.rebuildClaw();
   }
 
   powerFor(key) {
@@ -371,7 +414,13 @@ export class ClawSim {
     const R = this.R;
     const filter = groups(0xffff, G_DOLL | G_STATIC);
     const hp = this.hubPos;
-    const hit = this.world.castRay(new R.Ray({ x: hp.x, y: hp.y - 0.034, z: hp.z }, { x: 0, y: -1, z: 0 }), 0.2, true, undefined, filter);
+    const hit = this.world.castRay(
+      new R.Ray({ x: hp.x, y: hp.y - 0.034 * this.clawScale, z: hp.z }, { x: 0, y: -1, z: 0 }),
+      0.2,
+      true,
+      undefined,
+      filter
+    );
     if (hit && hit.timeOfImpact < 0.008) return true;
     for (const p of this.prongs) {
       const q = p.body.rotation();
@@ -408,8 +457,9 @@ export class ClawSim {
         const a = 1 - Math.exp(-dt * 12); // gantry inertia
         this.vel.x += (this.input.x * 0.2 - this.vel.x) * a;
         this.vel.z += (this.input.z * 0.2 - this.vel.z) * a;
-        hp.x = Math.min(HUB_RANGE.x1, Math.max(HUB_RANGE.x0, hp.x + this.vel.x * dt));
-        hp.z = Math.min(HUB_RANGE.z1, Math.max(HUB_RANGE.z0, hp.z + this.vel.z * dt));
+        const range = this.hubRange;
+        hp.x = Math.min(range.x1, Math.max(range.x0, hp.x + this.vel.x * dt));
+        hp.z = Math.min(range.z1, Math.max(range.z0, hp.z + this.vel.z * dt));
         this.timeLeft -= dt;
         if (this.timeLeft <= 0) this.go("drop");
         break;
@@ -418,8 +468,8 @@ export class ClawSim {
         this.vel.x = this.vel.z = 0;
         if (this.t > 0.3) {
           hp.y -= 0.22 * dt;
-          if (hp.y <= HUB_MIN_Y || (this.stepCount % 2 === 0 && this.hubTouching())) {
-            hp.y = Math.max(hp.y, HUB_MIN_Y);
+          if (hp.y <= this.hubMinY || (this.stepCount % 2 === 0 && this.hubTouching())) {
+            hp.y = Math.max(hp.y, this.hubMinY);
             this.go("grab");
           }
         }
@@ -444,10 +494,11 @@ export class ClawSim {
         break;
       }
       case "move": {
-        const near = Math.hypot(HOME.x - hp.x, HOME.z - hp.z) < 0.09;
+        const home = this.home;
+        const near = Math.hypot(home.x - hp.x, home.z - hp.z) < 0.09;
         const p = this.settings.exitDrop && near && !this.strong ? 0 : this.powerFor("movePower");
         if (p !== this.power) this.setGripPower(p);
-        if (this.moveToward(HOME.x, HOME.z, 0.2, dt)) this.go("release");
+        if (this.moveToward(home.x, home.z, 0.2, dt)) this.go("release");
         break;
       }
       case "release":
@@ -495,12 +546,18 @@ export class ClawSim {
         }
       }
       if (this.broken) continue; // dolls are flying out of the smashed machine
-      const inChute = p.x < c.x1 && p.z > c.z0;
-      if (p.y < -0.09 && inChute) {
-        // any doll that drops down the chute is won, however it got there (claw, nudged off the
-        // pile, rolled in between games)
-        this.removeDoll(d);
-        this.events.push({ type: "won", doll: d });
+      // Any doll that goes down the chute is won, however it got there (claw, pushed off the pile
+      // by the prongs, rolled in between games). The footprint gets a doll-radius margin so one
+      // squeezing past the guard's edge still counts. It must never fall to the safety net below:
+      // these checks run every 6 steps, so a falling doll is often caught between the two heights.
+      const inChute = p.x < c.x1 + CHUTE_MARGIN && p.z > c.z0 - CHUTE_MARGIN;
+      if (inChute && p.y < -0.03) {
+        d.chuteT = (d.chuteT || 0) + dt;
+        // gone from view, or wedged in the shaft for a while
+        if (p.y < -0.09 || d.chuteT > 1) {
+          this.removeDoll(d);
+          this.events.push({ type: "won", doll: d });
+        }
       } else if (p.y < -0.03 || !Number.isFinite(p.y)) {
         // safety net: never let a doll vanish through the floor; drop it back in from above
         body.setTranslation({ x: Math.min(0.3, Math.max(c.x1 + 0.08, p.x || 0)), y: 0.5, z: Math.max(-0.25, Math.min(0.25, p.z || 0)) }, true);

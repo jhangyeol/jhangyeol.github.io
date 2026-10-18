@@ -1,6 +1,6 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
-import { ClawSim, DEFAULT_SETTINGS } from "./sim.js";
+import { ClawSim, DEFAULT_SETTINGS, CLAW_SIZE_RANGE } from "./sim.js";
 import { CHARACTERS } from "./characters.js";
 import { createScene } from "./scene.js";
 import { createDollMeshes } from "./dolls.js";
@@ -115,6 +115,8 @@ export async function start() {
     $("drop").classList.toggle("off", sim.state !== "play");
     $("doll-count").textContent = `${sim.dolls.length} / ${CAPACITY}`;
     $("add").disabled = sim.dolls.length >= CAPACITY || sim.broken;
+    $("remove").disabled = sim.dolls.length === 0 || sim.broken;
+    $("clawSize-note").textContent = sim.clawDirty ? "이번 판이 끝나면 적용" : "";
     const n = sim.settings.randomCycle;
     $("cycle-info").textContent = n > 0 ? `다음 강한 판까지 ${n - (sim.playCount % n)}판` : "랜덤 게임 꺼짐";
   }
@@ -148,6 +150,17 @@ export async function start() {
     updateButtons();
   }
 
+  // take a doll out from the top of the pile, the way staff would
+  function removeDoll() {
+    if (sim.broken || !sim.dolls.length) return;
+    const d = sim.dolls.reduce((a, b) => (b.body.translation().y > a.body.translation().y ? b : a));
+    sim.removeDoll(d);
+    for (const o of sim.dolls) o.body.wakeUp(); // let the pile settle into the gap
+    toast(`${CHARACTERS[d.type].name} 뺐어요`);
+    dirty = 3;
+    updateButtons();
+  }
+
   // ---------- hidden feature: smash the machine, every doll is yours ----------
 
   function smash() {
@@ -175,11 +188,11 @@ export async function start() {
     }, 2300);
   }
 
-  // ---------- viewpoint: click and drag on the machine to walk around it (−45° … +45°) ----------
+  // ---------- viewpoint: click and drag on the machine to walk around it (−90° … +90°) ----------
 
   let viewAngle = 0;
   function setAngle(deg) {
-    viewAngle = Math.max(-45, Math.min(45, deg));
+    viewAngle = Math.max(-view.MAX_ANGLE, Math.min(view.MAX_ANGLE, deg));
     view.setViewAngle(viewAngle);
   }
   // one finger / mouse drag turns the view; two fingers pinch to zoom; the wheel zooms too
@@ -211,7 +224,7 @@ export async function start() {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
       // dragging right swings you to the left side, like grabbing the scene and turning it
-      setAngle(dragStart - ((e.clientX - dragX) / canvas.clientWidth) * 120);
+      setAngle(dragStart - ((e.clientX - dragX) / canvas.clientWidth) * 180);
     } else if (pointers.size === 2 && pinchDist > 0) {
       zoom = view.setZoom((pinchZoom * pinchDist) / pinchSpan());
     }
@@ -268,18 +281,24 @@ export async function start() {
   $("coin").onclick = insertCoin;
   $("drop").onclick = drop;
   $("add").onclick = addDoll;
+  $("remove").onclick = removeDoll;
 
   // operator settings (based on how Korean boards expose them)
-  const settingFields = ["catchPower", "topPower", "movePower", "randomCycle"];
+  const settingFields = ["catchPower", "topPower", "movePower", "randomCycle", "clawSize"];
+  const settingText = (key) => (key === "clawSize" ? sim.settings[key] + "%" : sim.settings[key]);
+  $("clawSize").min = CLAW_SIZE_RANGE[0];
+  $("clawSize").max = CLAW_SIZE_RANGE[1];
   for (const key of settingFields) {
     const input = $(key);
     const out = $(key + "-v");
     input.value = sim.settings[key];
-    out.textContent = input.value;
+    out.textContent = settingText(key);
     input.oninput = () => {
-      sim.settings[key] = +input.value;
-      out.textContent = input.value;
+      if (key === "clawSize") sim.setClawSize(+input.value);
+      else sim.settings[key] = +input.value;
+      out.textContent = settingText(key);
       saveSettings(sim.settings);
+      dirty = 3;
       updateButtons();
     };
   }
@@ -290,11 +309,13 @@ export async function start() {
   };
   $("reset-settings").onclick = () => {
     Object.assign(sim.settings, DEFAULT_SETTINGS);
+    sim.setClawSize(DEFAULT_SETTINGS.clawSize);
     saveSettings(sim.settings);
     for (const key of settingFields) {
       $(key).value = sim.settings[key];
-      $(key + "-v").textContent = sim.settings[key];
+      $(key + "-v").textContent = settingText(key);
     }
+    dirty = 3;
     $("exitDrop").checked = sim.settings.exitDrop;
     updateButtons();
   };
@@ -322,6 +343,7 @@ export async function start() {
       if (!e.repeat) drop();
     } else if (k === "enter" || k === "c") insertCoin();
     else if (k === "n") addDoll();
+    else if (k === "m") removeDoll();
     else keys.add(k);
   });
   addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
