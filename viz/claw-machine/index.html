@@ -649,10 +649,12 @@
     <div id="loading">물리 엔진 불러오는 중…</div>
 
     <script type="module">
-      import("./main.js").catch((e) => {
-        document.getElementById("loading").textContent = "불러오기 실패: " + e.message;
-        console.error(e);
-      });
+      import("./main.js")
+        .then((m) => m.start())
+        .catch((e) => {
+          document.getElementById("loading").textContent = "불러오기 실패: " + e.message;
+          console.error(e);
+        });
     </script>
   </body>
 </html>
