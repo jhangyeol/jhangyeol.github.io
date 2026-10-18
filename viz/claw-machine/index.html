@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="치이카와(먼작귀) 인형뽑기 시뮬레이터: Rapier 물리 엔진과 Three.js로 만든 한국식 집게 힘 설정 재현." />
+    <title>먼작귀 인형뽑기</title>
+    <link rel="icon" type="image/png" href="img/welcome.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #120c1f;
+        --panel: rgba(24, 16, 40, 0.78);
+        --line: rgba(255, 255, 255, 0.12);
+        --ink: #fbf6ff;
+        --muted: #b9add0;
+        --pink: #ff6fa8;
+        --blue: #2f7bff;
+        --gold: #ffd35a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          "Noto Sans KR",
+          sans-serif;
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+      #view {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+      }
+      .hud-top {
+        position: fixed;
+        top: max(12px, env(safe-area-inset-top));
+        left: 16px;
+        right: 16px;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        justify-content: space-between;
+        pointer-events: none;
+      }
+      .hud-top > * {
+        pointer-events: auto;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 10px 14px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      h1 {
+        font:
+          26px/1.1 "Jua",
+          sans-serif;
+        white-space: nowrap;
+        margin: 0;
+        letter-spacing: 0.5px;
+      }
+      h1 a {
+        color: var(--muted);
+        text-decoration: none;
+        font:
+          12px/1 -apple-system,
+          sans-serif;
+        margin-right: 6px;
+        vertical-align: middle;
+      }
+      .score {
+        display: flex;
+        gap: 14px;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .score b {
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+      }
+      #shelf {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px;
+        max-width: 300px;
+      }
+      .chip {
+        font-size: 11px;
+        padding: 1px 7px 1px 4px;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, 0.1);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .chip i {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        border: 1px solid rgba(0, 0, 0, 0.25);
+      }
+      .right {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-end;
+      }
+      button {
+        font:
+          18px/1 "Jua",
+          sans-serif;
+        color: #fff;
+        border: 0;
+        border-radius: 12px;
+        padding: 11px 16px;
+        cursor: pointer;
+        background: linear-gradient(#ff8dbb, #ff5c99);
+        box-shadow:
+          0 3px 0 #b8336a,
+          0 6px 16px rgba(0, 0, 0, 0.35);
+        transition:
+          transform 0.06s,
+          box-shadow 0.06s,
+          opacity 0.2s;
+        user-select: none;
+        -webkit-user-select: none;
+        white-space: nowrap;
+      }
+      button:active:not(:disabled) {
+        transform: translateY(3px);
+        box-shadow: 0 0 0 #b8336a;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      button.ghost {
+        background: rgba(255, 255, 255, 0.12);
+        box-shadow: none;
+        font-size: 15px;
+        padding: 8px 12px;
+      }
+      #add {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 8px 12px 9px;
+        background: linear-gradient(#fffdf6, #fff1d6);
+        color: #6b3b12;
+        box-shadow:
+          0 3px 0 #e2b35d,
+          0 6px 16px rgba(0, 0, 0, 0.35);
+      }
+      #add img {
+        width: 132px;
+        height: auto;
+        display: block;
+      }
+      #add span {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.1;
+      }
+      #add small {
+        font:
+          11px/1.2 -apple-system,
+          "Noto Sans KR",
+          sans-serif;
+        color: #a0703f;
+        margin-top: 2px;
+      }
+      .row {
+        display: flex;
+        gap: 6px;
+      }
+      #sky {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+      }
+      .sky-bg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .sky-clouds {
+        position: absolute;
+        inset: 0;
+      }
+      .cloud {
+        position: absolute;
+        left: 0;
+        animation: drift linear infinite;
+        will-change: transform;
+      }
+      .cloud canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        filter: blur(2px);
+        animation: bob ease-in-out infinite alternate;
+      }
+      @keyframes drift {
+        from {
+          transform: translateX(-70vw);
+        }
+        to {
+          transform: translateX(110vw);
+        }
+      }
+      @keyframes bob {
+        to {
+          transform: translateY(14px);
+        }
+      }
+      #view {
+        cursor: grab;
+      }
+      #view.dragging {
+        cursor: grabbing;
+      }
+      .walker {
+        position: absolute;
+        left: 0;
+        will-change: transform;
+      }
+      .walker img {
+        display: block;
+        width: 100%;
+        height: auto;
+        filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.18));
+        animation: hop 0.55s ease-in-out infinite alternate;
+        transform-origin: 50% 100%;
+      }
+      @keyframes hop {
+        from {
+          transform: translateY(0) rotate(-5deg);
+        }
+        to {
+          transform: translateY(-18%) rotate(5deg);
+        }
+      }
+      #drop.off {
+        opacity: 0.55;
+      }
+      .credits {
+        font-size: 11px;
+        color: var(--muted);
+        margin: 8px 0;
+      }
+      .win {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(10, 6, 20, 0.6);
+        backdrop-filter: blur(4px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s;
+        z-index: 5;
+        padding: 16px;
+      }
+      .win.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .win-box {
+        width: min(340px, 100%);
+        text-align: center;
+        padding: 18px 18px 22px;
+        border-radius: 24px;
+        background: linear-gradient(#fff6fb, #ffe3ef);
+        color: #6b2346;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        transform: scale(0.85);
+        transition: transform 0.35s cubic-bezier(0.2, 1.6, 0.4, 1);
+      }
+      .win.show .win-box {
+        transform: scale(1);
+      }
+      .win-stage {
+        position: relative;
+        aspect-ratio: 1;
+        width: 100%;
+        overflow: hidden;
+        border-radius: 18px;
+      }
+      .win-rays {
+        position: absolute;
+        inset: -40%;
+        background: repeating-conic-gradient(from 0deg, rgba(255, 214, 102, 0.55) 0 10deg, rgba(255, 255, 255, 0) 10deg 22.5deg);
+        animation: spin 9s linear infinite;
+      }
+      .win-glow {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.95) 0 22%, rgba(255, 220, 120, 0.5) 40%, rgba(255, 255, 255, 0) 68%);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      #win-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .win-sparkles i {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        color: #ffd24a;
+        text-shadow:
+          0 0 8px #fff,
+          0 0 14px #ffcf4a;
+        font-style: normal;
+        animation: twinkle 1.4s ease-in-out infinite;
+      }
+      #win-name {
+        font:
+          30px/1.2 "Jua",
+          sans-serif;
+        margin: 14px 0 12px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.6;
+          transform: scale(1.06);
+        }
+      }
+      @keyframes twinkle {
+        0%,
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
+        }
+        50% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1) rotate(45deg);
+        }
+      }
+      #doll-count {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      #settings {
+        display: none;
+        width: min(310px, calc(100vw - 32px));
+      }
+      #settings.open {
+        display: block;
+      }
+      #settings h2 {
+        font:
+          18px/1.2 "Jua",
+          sans-serif;
+        margin: 0 0 4px;
+      }
+      #settings p {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      #settings label {
+        display: grid;
+        grid-template-columns: 92px 1fr 28px;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        margin: 6px 0;
+      }
+      #settings output {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: var(--gold);
+      }
+      #settings input[type="range"] {
+        width: 100%;
+        accent-color: var(--pink);
+      }
+      #settings .check {
+        grid-template-columns: auto 1fr;
+      }
+      #settings a {
+        color: #9cc7ff;
+      }
+      #cycle-info {
+        font-size: 12px;
+        color: var(--gold);
+        margin: 4px 0 8px;
+      }
+      .controls {
+        position: fixed;
+        left: 16px;
+        right: 16px;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        pointer-events: none;
+      }
+      .controls > * {
+        pointer-events: auto;
+      }
+      #stick {
+        width: 116px;
+        height: 116px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
+        border: 1px solid var(--line);
+        position: relative;
+        touch-action: none;
+        backdrop-filter: blur(6px);
+      }
+      #stick-nub {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 48px;
+        height: 48px;
+        margin: -24px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #ff7d8f, #c3142e 70%);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+        pointer-events: none;
+      }
+      .buttons {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
+      #drop {
+        width: 92px;
+        height: 92px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 40% 35%, #6aa3ff, #1d5ee0 70%);
+        box-shadow:
+          0 5px 0 #0f3a94,
+          0 8px 20px rgba(0, 0, 0, 0.4);
+        font-size: 20px;
+      }
+      #status {
+        position: fixed;
+        top: 42%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font:
+          26px/1 "Jua",
+          sans-serif;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .toast {
+        position: fixed;
+        top: 30%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.9);
+        opacity: 0;
+        font:
+          30px/1.2 "Jua",
+          sans-serif;
+        padding: 12px 22px;
+        border-radius: 16px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        transition:
+          opacity 0.25s,
+          transform 0.25s;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+      }
+      .toast.pop {
+        background: linear-gradient(#ff8dbb, #ff5c99);
+      }
+      .keys {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: var(--bg);
+        font:
+          22px "Jua",
+          sans-serif;
+        z-index: 10;
+      }
+      @media (max-width: 640px) {
+        h1 {
+          font-size: 18px;
+        }
+        .card {
+          padding: 8px 10px;
+        }
+        .score {
+          gap: 8px;
+          font-size: 12px;
+        }
+        button.ghost {
+          font-size: 13px;
+          padding: 6px 8px;
+        }
+        .row {
+          flex-direction: column;
+          align-items: flex-end;
+        }
+        .keys {
+          display: none;
+        }
+        #stick {
+          width: 104px;
+          height: 104px;
+        }
+        #drop {
+          width: 80px;
+          height: 80px;
+        }
+        #add img {
+          width: 96px;
+        }
+        button {
+          font-size: 16px;
+          padding: 10px 12px;
+        }
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
+          "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.21.0/dist/rapier.mjs"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="sky"></div>
+    <canvas id="view"></canvas>
+
+    <div class="hud-top">
+      <div class="card">
+        <h1><a href="/">←</a>먼작귀 인형뽑기</h1>
+        <div class="score">
+          <span>사용 <b id="spent">0</b>원</span>
+          <span>획득 <b id="won-count">0</b>개</span>
+        </div>
+        <div id="shelf"></div>
+        <div class="keys">방향키 이동 · Space 집게 내리기 · Enter 코인 · 드래그 시점 회전 · 스크롤 확대</div>
+      </div>
+      <div class="right">
+        <button id="add" title="인형 추가 (N)">
+          <img src="img/welcome.png" alt="" width="241" height="129" />
+          <span>인형 추가</span>
+        </button>
+        <span id="doll-count"></span>
+        <div class="row">
+          <button id="quality" class="ghost"></button>
+          <button id="settings-toggle" class="ghost">⚙ 운영자 설정</button>
+        </div>
+        <div id="settings" class="card">
+          <h2>집게 설정 (기판)</h2>
+          <label>잡는 힘 <input id="catchPower" type="range" min="1" max="48" /><output id="catchPower-v"></output></label>
+          <label>상승 후 힘 <input id="topPower" type="range" min="1" max="48" /><output id="topPower-v"></output></label>
+          <label>이동 힘 <input id="movePower" type="range" min="1" max="48" /><output id="movePower-v"></output></label>
+          <label>랜덤 게임 주기 <input id="randomCycle" type="range" min="0" max="40" /><output id="randomCycle-v"></output></label>
+          <div id="cycle-info"></div>
+          <label class="check"><input id="exitDrop" type="checkbox" /> 출구 앞에서 힘 풀기 (불법 개조 재현)</label>
+          <button id="reset-settings" class="ghost">기본값으로</button>
+          <div class="credits">
+            3D 모델:
+            <a href="https://sketchfab.com/3d-models/chiikawa-459a5d250807446b9b355f2363e81a23" target="_blank" rel="noopener">"Chiikawa"</a>
+            by <a href="https://sketchfab.com/thegageinator" target="_blank" rel="noopener">SPONg</a>,
+            <a href="https://sketchfab.com/3d-models/usagi-edeb7465e9894aa7b0d205216ffde45d" target="_blank" rel="noopener">"Usagi"</a>
+            by <a href="https://sketchfab.com/leehwaishing" target="_blank" rel="noopener">leehwaishing</a>,
+            <a href="https://sketchfab.com/3d-models/hachiware-543f26d194254b5cbcdc38d9c5c877f7" target="_blank" rel="noopener">"Hachiware"</a>
+            by <a href="https://sketchfab.com/Yoshi.Hatsu" target="_blank" rel="noopener">Yoshi.Hatsu</a>,
+            <a href="https://sketchfab.com/3d-models/momonga-ver-20-f9213349071a4fd2afa35a5b6672f4e0" target="_blank" rel="noopener"
+              >"Momonga Ver 2.0"</a
+            >
+            by <a href="https://sketchfab.com/Komi525" target="_blank" rel="noopener">Komi</a>,
+            <a href="https://sketchfab.com/3d-models/shisa-chiikawa-41754374b81f4a8f9ed6b585b2664ef6" target="_blank" rel="noopener"
+              >"シーサー ちいかわ Shisa Chiikawa"</a
+            >
+            by <a href="https://sketchfab.com/BirdofCinder" target="_blank" rel="noopener">BirdofCinder</a> ·
+            <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="win" class="win" role="dialog" aria-modal="true" aria-labelledby="win-name">
+      <div class="win-box">
+        <div class="win-stage">
+          <div class="win-rays"></div>
+          <div class="win-glow"></div>
+          <canvas id="win-canvas"></canvas>
+          <div id="win-sparkles" class="win-sparkles"></div>
+        </div>
+        <div id="win-name"></div>
+        <button id="win-close">또 뽑기!</button>
+      </div>
+    </div>
+
+    <div id="status"></div>
+    <div id="toast" class="toast"></div>
+
+    <div class="controls">
+      <div id="stick"><div id="stick-nub"></div></div>
+      <div class="buttons">
+        <button id="coin">🪙 500원</button>
+        <button id="drop">잡기</button>
+      </div>
+    </div>
+    <div id="loading">물리 엔진 불러오는 중…</div>
+
+    <script type="module">
+      import("./main.js").catch((e) => {
+        document.getElementById("loading").textContent = "불러오기 실패: " + e.message;
+        console.error(e);
+      });
+    </script>
+  </body>
+</html>
