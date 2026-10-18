@@ -1,0 +1,81 @@
+// Character specs shared by physics (collision shape) and rendering (look).
+// Units: meters. Origin of each doll = rigid-body origin, roughly its center.
+// Proportions follow the plush look: a wide mochi-like head that melts into a small body.
+// face.* picks how the face texture is painted (see dolls.js).
+
+export const CHARACTERS = [
+  {
+    id: "chiikawa",
+    name: "치이카와",
+    head: { r: 0.05, y: 0.028, sx: 1.18, sy: 0.86, sz: 1.0 },
+    body: { r: 0.041, y: -0.034 },
+    colors: { base: 0xfdfbf7, accent: 0xfdfbf7, blush: 0xf7a6b8 },
+    ears: "bear",
+    face: { eyes: "big", brows: true, mouth: "omega" },
+    model: { url: "models/chiikawa.glb", height: 0.15 },
+  },
+  {
+    id: "hachiware",
+    name: "하치와레",
+    head: { r: 0.051, y: 0.029, sx: 1.18, sy: 0.86, sz: 1.0 },
+    body: { r: 0.042, y: -0.035 },
+    colors: { base: 0xfdfbf7, accent: 0x6f86b4, blush: 0xf7a6b8 },
+    ears: "cat",
+    pattern: "hachiware",
+    face: { eyes: "big", mouth: "smile" },
+    model: { url: "models/hachiware.glb", height: 0.155 },
+  },
+  {
+    id: "usagi",
+    name: "우사기",
+    head: { r: 0.048, y: 0.028, sx: 1.1, sy: 0.9, sz: 1.0 },
+    body: { r: 0.042, y: -0.036 },
+    colors: { base: 0xf8e9ad, accent: 0xf8e9ad, blush: 0xf5a0a6 },
+    ears: "rabbit",
+    // long ears get a soft collider so they cannot poke through walls
+    earBall: { r: 0.02, y: 0.105 },
+    face: { eyes: "small", mouth: "yell" },
+    model: { url: "models/usagi.glb", height: 0.2, rotY: Math.PI, earFrac: 0.33 },
+  },
+  {
+    id: "momonga",
+    name: "모몽가",
+    head: { r: 0.048, y: 0.03, sx: 1.12, sy: 0.92, sz: 1.0 },
+    body: { r: 0.038, y: -0.034 },
+    tail: { r: 0.034, y: -0.005, z: -0.05 },
+    colors: { base: 0xfefefe, accent: 0x9fcbec, blush: 0xf7a6b8 },
+    ears: "round",
+    tuft: true,
+    face: { eyes: "side", nose: true, mouth: "teeth" },
+    model: { url: "models/momonga.glb", height: 0.15 },
+  },
+  {
+    id: "kurimanju",
+    name: "쿠리만쥬",
+    head: { r: 0.054, y: 0.028, sx: 1.16, sy: 0.86, sz: 1.02 },
+    body: { r: 0.047, y: -0.034 },
+    colors: { base: 0xc9935d, accent: 0xf3dcb8, blush: 0xe58a76 },
+    ears: "small",
+    face: { eyes: "dot", muzzle: true, nose: "dark", mouth: "omega" },
+  },
+  {
+    id: "rakko",
+    name: "랏코",
+    head: { r: 0.056, y: 0.032, sx: 1.12, sy: 0.92, sz: 1.0 },
+    body: { r: 0.05, y: -0.036 },
+    colors: { base: 0x9a7b62, accent: 0xf2e6d6, blush: 0xe59a8c },
+    ears: "small",
+    face: { eyes: "dot", muzzle: true, nose: "dark", mouth: "omega" },
+  },
+  {
+    id: "shisa",
+    name: "시사",
+    head: { r: 0.052, y: 0.03, sx: 1.12, sy: 0.9, sz: 1.0 },
+    body: { r: 0.043, y: -0.036 },
+    colors: { base: 0xf2b45c, accent: 0xb5652e, blush: 0xf08f80 },
+    ears: "small",
+    mane: true,
+    face: { eyes: "big", mouth: "smile" },
+    model: { url: "models/shisa.glb", height: 0.155 },
+  },
+];
