@@ -15,7 +15,7 @@ const binOf = (v) => {
 const edgeAfter = (b) => LO + (b + 1) * BW;
 const sigmoid = (z) => 1 / (1 + Math.exp(-z));
 
-function newLeaf(depth, G, H, n) {
+function newLeaf(depth, G, H, n, d) {
   return {
     leaf: true,
     depth,
@@ -23,9 +23,9 @@ function newLeaf(depth, G, H, n) {
     H,
     n,
     since: 0,
-    hG: new Float64Array(2 * BINS),
-    hH: new Float64Array(2 * BINS),
-    hN: new Float64Array(2 * BINS),
+    hG: new Float64Array(d * BINS),
+    hH: new Float64Array(d * BINS),
+    hN: new Float64Array(d * BINS),
   };
 }
 
@@ -34,7 +34,8 @@ export class StreamTree {
     this.id = id;
     this.bornAt = bornAt;
     this.p = p;
-    this.root = newLeaf(0, 0, 0, 0);
+    this.d = p.d || 2;
+    this.root = newLeaf(0, 0, 0, 0, this.d);
     this.n = 0;
     this.splits = 0;
     this.lastSplitAt = null;
@@ -61,7 +62,7 @@ export class StreamTree {
     l.n += 1;
     this.n += 1;
     if (l.depth >= this.p.maxDepth) return;
-    for (let f = 0; f < 2; f++) {
+    for (let f = 0; f < this.d; f++) {
       const i = f * BINS + binOf(x[f]);
       l.hG[i] += g;
       l.hH[i] += h;
@@ -76,7 +77,7 @@ export class StreamTree {
   trySplit(l, t) {
     const { lambda, delta, tau, minLeaf, gamma } = this.p;
     const best = [];
-    for (let f = 0; f < 2; f++) {
+    for (let f = 0; f < this.d; f++) {
       const o = f * BINS;
       let Gt = 0;
       let Ht = 0;
@@ -113,8 +114,8 @@ export class StreamTree {
     l.leaf = false;
     l.f = b1.f;
     l.thr = edgeAfter(b1.b);
-    l.left = newLeaf(l.depth + 1, b1.GL, b1.HL, b1.NL);
-    l.right = newLeaf(l.depth + 1, b1.GR, b1.HR, b1.NR);
+    l.left = newLeaf(l.depth + 1, b1.GL, b1.HL, b1.NL, this.d);
+    l.right = newLeaf(l.depth + 1, b1.GR, b1.HR, b1.NR, this.d);
     l.gain = b1.gain;
     l.splitAt = t;
     l.hG = l.hH = l.hN = null;
@@ -150,18 +151,15 @@ export class StreamTree {
   }
 }
 
-export function predictSnap(snap, x1, x2) {
+export function leafIndexSnap(snap, x) {
   const N = snap.nodes;
   let i = 0;
-  while (N[i][0] >= 0) i = (N[i][0] === 0 ? x1 : x2) <= N[i][1] ? N[i][2] : N[i][3];
-  return N[i][4];
+  while (N[i][0] >= 0) i = x[N[i][0]] <= N[i][1] ? N[i][2] : N[i][3];
+  return i;
 }
 
-export function leafIndexSnap(snap, x1, x2) {
-  const N = snap.nodes;
-  let i = 0;
-  while (N[i][0] >= 0) i = (N[i][0] === 0 ? x1 : x2) <= N[i][1] ? N[i][2] : N[i][3];
-  return i;
+export function predictSnap(snap, x) {
+  return snap.nodes[leafIndexSnap(snap, x)][4];
 }
 
 export const DEFAULTS = {
@@ -177,6 +175,7 @@ export const DEFAULTS = {
   replace: true,
   sensitivity: 1,
   minAge: 300,
+  zWarn: 3,
 };
 
 export class SGBT {
@@ -200,7 +199,7 @@ export class SGBT {
   }
 
   freshDetector() {
-    return { ef: 0, es: 0, cnt: 0, state: "ok", warnAt: null, altErr: 0 };
+    return { ef: 0, es: 0, ev: 0, z: 0, cnt: 0, state: "ok", warnAt: null, altErr: 0 };
   }
 
   raw(x) {
@@ -249,8 +248,10 @@ export class SGBT {
     d.cnt += 1;
     if (d.cnt === 1) {
       d.ef = d.es = err;
+      d.ev = err * err;
     } else {
       d.ef += 0.03 * (err - d.ef);
+      d.ev += 0.003 * ((err - d.es) ** 2 - d.ev);
       d.es += 0.003 * (err - d.es);
     }
     const alt = this.alts[k];
@@ -260,8 +261,11 @@ export class SGBT {
     }
     if (d.cnt < this.p.minAge) return;
     const floor = this.task === "cls" ? 2e-3 : 2e-3;
-    const warnLine = d.es * (1 + 0.45 / s) + floor;
-    const driftLine = d.es * (1 + 0.9 / s) + floor;
+    // fast mean ~ 66 samples: z-score of the fast mean against the slow mean/variance
+    d.z = (d.ef - d.es) / Math.sqrt(d.ev / 66 + 1e-12);
+    const Z = this.p.zWarn ?? 3;
+    const warnLine = d.z > Z / s ? d.es * (1 + 0.45 / s) + floor : Infinity;
+    const driftLine = d.z > (2 * Z) / s ? d.es * (1 + 0.9 / s) + floor : Infinity;
     if (d.state === "ok" && d.ef > warnLine) {
       d.state = "warn";
       d.warnAt = t;
@@ -308,7 +312,7 @@ export class SGBT {
     return {
       trees: this.trees.map((t) => t.snapshot()),
       alts: this.alts.map((a) => (a ? a.snapshot() : null)),
-      det: this.det.map((d) => ({ ef: d.ef, es: d.es, state: d.state, warnAt: d.warnAt, cnt: d.cnt })),
+      det: this.det.map((d) => ({ ef: d.ef, es: d.es, z: d.z, state: d.state, warnAt: d.warnAt, cnt: d.cnt })),
     };
   }
 }

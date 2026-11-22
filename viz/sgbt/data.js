@@ -280,7 +280,224 @@ const REG = [
   })(),
 ];
 
-export const SCENARIOS = { cls: CLS, reg: REG };
+// ---------------------------------------------------------------- 2-D scenarios: shared metadata
+const XY = [
+  { name: "x₁", raw: (v) => v },
+  { name: "x₂", raw: (v) => v },
+];
+for (const sc of [...CLS, ...REG]) {
+  sc.group = "2-D synthetic";
+  sc.dim = 2;
+  sc.features = XY;
+  sc.axes = [0, 1];
+  sc.truthVec = (x, ph) => sc.truth(x[0], x[1], ph);
+}
+
+// ---------------------------------------------------------------- Agrawal (MOA AGRAWAL generator)
+// Ten loan-approval functions over 9 attributes. Concepts cycle through AGR_FUNCS.
+const AGR_FEATS = [
+  ["salary", 20000, 150000, "k"],
+  ["commission", 0, 75000, "k"],
+  ["age", 20, 80, ""],
+  ["elevel", 0, 4, ""],
+  ["car", 1, 20, ""],
+  ["zipcode", 0, 8, ""],
+  ["hvalue", 0, 1350000, "k"],
+  ["hyears", 1, 30, ""],
+  ["loan", 0, 500000, "k"],
+].map(([name, lo, hi, unit]) => ({
+  name,
+  lo,
+  hi,
+  raw: (v) => lo + ((v + 1) / 2) * (hi - lo),
+  fmt: unit === "k" ? (r) => (r / 1000).toFixed(1) + "k" : (r) => r.toFixed(1),
+}));
+const AGR_FUNCS = [1, 3, 5, 8];
+const between = (v, a, b) => v >= a && v <= b;
+function agrClass(fn, [salary, commission, age, elevel, , , hvalue, hyears, loan]) {
+  const dispo = (k) => (2 * (salary + commission)) / 3 - k;
+  switch (fn) {
+    case 1:
+      return age < 40 || age >= 60 ? 0 : 1;
+    case 2:
+      return (age < 40 ? between(salary, 50000, 100000) : age < 60 ? between(salary, 75000, 125000) : between(salary, 25000, 75000)) ? 0 : 1;
+    case 3:
+      return (age < 40 ? elevel <= 1 : age < 60 ? between(elevel, 1, 3) : elevel >= 2) ? 0 : 1;
+    case 4:
+      return (
+        age < 40
+          ? elevel <= 1
+            ? between(salary, 25000, 75000)
+            : between(salary, 50000, 100000)
+          : age < 60
+            ? between(elevel, 1, 3)
+              ? between(salary, 50000, 100000)
+              : between(salary, 75000, 125000)
+            : elevel >= 2
+              ? between(salary, 50000, 100000)
+              : between(salary, 25000, 75000)
+      )
+        ? 0
+        : 1;
+    case 5:
+      return (
+        age < 40
+          ? between(salary, 50000, 100000)
+            ? between(loan, 100000, 300000)
+            : between(loan, 200000, 400000)
+          : age < 60
+            ? between(salary, 75000, 125000)
+              ? between(loan, 200000, 400000)
+              : between(loan, 300000, 500000)
+            : between(salary, 25000, 75000)
+              ? between(loan, 300000, 500000)
+              : between(loan, 100000, 300000)
+      )
+        ? 0
+        : 1;
+    case 6: {
+      const tot = salary + commission;
+      return (age < 40 ? between(tot, 50000, 100000) : age < 60 ? between(tot, 75000, 125000) : between(tot, 25000, 75000)) ? 0 : 1;
+    }
+    case 7:
+      return dispo(loan / 5 + 20000) > 0 ? 0 : 1;
+    case 8:
+      return dispo(5000 * elevel + 20000) > 0 ? 0 : 1;
+    case 9:
+      return dispo(5000 * elevel + loan / 5 + 10000) > 0 ? 0 : 1;
+    default: {
+      const equity = age >= 20 ? 0.1 * hvalue * Math.max(hyears - 20, 0) : 0;
+      return dispo(5000 * elevel - equity / 5 + 10000) > 0 ? 0 : 1;
+    }
+  }
+}
+const agrFn = (phase) => AGR_FUNCS[((Math.round(phase) % 4) + 4) % 4];
+function agrScenario(id, name, drift) {
+  return {
+    id,
+    name,
+    group: "Synthetic (MOA)",
+    desc: `Agrawal 대출 승인 생성기, 9개 속성. concept마다 분류 함수가 바뀜 (F${AGR_FUNCS.join("→F")}). ${
+      drift === "abrupt" ? "급격한" : "점진적(gradual)"
+    } drift.`,
+    fixedDrift: drift,
+    dim: 9,
+    features: AGR_FEATS,
+    axes: [2, 0],
+    conceptName: (ph) => "F" + agrFn(ph),
+    sample(rng, phase, noise) {
+      const salary = 20000 + 130000 * rng();
+      const commission = salary >= 75000 ? 0 : 10000 + 65000 * rng();
+      const age = 20 + Math.floor(61 * rng());
+      const elevel = Math.floor(5 * rng());
+      const car = 1 + Math.floor(20 * rng());
+      const zipcode = Math.floor(9 * rng());
+      const hvalue = (9 - zipcode) * 100000 * (0.5 + rng());
+      const hyears = 1 + Math.floor(30 * rng());
+      const loan = 500000 * rng();
+      const raw = [salary, commission, age, elevel, car, zipcode, hvalue, hyears, loan];
+      const y = agrClass(agrFn(phase), raw);
+      const x = raw.map((r, f) => clampN(((r - AGR_FEATS[f].lo) / (AGR_FEATS[f].hi - AGR_FEATS[f].lo)) * 2 - 1));
+      return { x, y: rng() < noise ? 1 - y : y };
+    },
+    truthVec(x, phase) {
+      return agrClass(
+        agrFn(phase),
+        x.map((v, f) => AGR_FEATS[f].raw(v))
+      );
+    },
+  };
+}
+const clampN = (v) => (v < -1 ? -1 : v > 1 ? 1 : v);
+
+// ---------------------------------------------------------------- Friedman #1 with drift
+// y = 10 sin(pi u_a u_b) + 20 (u_c - .5)^2 + 10 u_d + 5 u_e, the relevant variables change per concept.
+const FRIED_PERM = [
+  [0, 1, 2, 3, 4],
+  [3, 5, 0, 1, 7],
+  [8, 2, 6, 4, 0],
+  [1, 9, 4, 6, 3],
+];
+const friedRaw = (u, [a, b, c, d, e]) => 10 * Math.sin(Math.PI * u[a] * u[b]) + 20 * (u[c] - 0.5) ** 2 + 10 * u[d] + 5 * u[e];
+function friedman(x, phase) {
+  const u = x.map((v) => (v + 1) / 2);
+  const i = Math.floor(phase);
+  const f = phase - i;
+  const A = friedRaw(u, FRIED_PERM[((i % 4) + 4) % 4]);
+  const B = f > 0 ? friedRaw(u, FRIED_PERM[(((i + 1) % 4) + 4) % 4]) : A;
+  return ((1 - f) * A + f * B - 14.4) / 5;
+}
+const FRIED = {
+  id: "fried",
+  name: "Friedman drift",
+  group: "Synthetic (high-dim)",
+  desc: "Friedman #1 회귀 (10개 입력 중 5개가 유효). concept마다 유효 변수가 바뀜. y는 (y−14.4)/5로 표준화.",
+  dim: 10,
+  features: Array.from({ length: 10 }, (_, f) => ({ name: "u" + f, raw: (v) => (v + 1) / 2 })),
+  axes: [0, 1],
+  sample(rng, phase, noise) {
+    const x = Array.from({ length: 10 }, () => rng() * 2 - 1);
+    return { x, y: friedman(x, phase) + gauss(rng) * noise * 2 };
+  },
+  truthVec: friedman,
+};
+
+// ---------------------------------------------------------------- real-world streams (quantized, see datasets/)
+function realScenario(id, name, file, desc, axes, source) {
+  return { id, name, group: "Real-world", real: true, file, desc, axes, source, dim: null, features: null };
+}
+const NOAA = realScenario(
+  "noaa",
+  "NOAA Weather",
+  "datasets/noaa.json",
+  "미국 Offutt 공군기지 50년 일별 기상 (18,159일, 8개 속성). 다음 날 비가 오는지(class 1) 예측. 계절·장기 기후 변화가 drift.",
+  [1, 0],
+  "Elwell & Polikar, 2011"
+);
+const ELEC = realScenario(
+  "elec",
+  "Electricity (ELEC2)",
+  "datasets/elec.json",
+  "호주 NSW 전력시장 30분 단위 데이터 (앞 30,000개, 6개 속성). 가격이 직전 24시간 평균 대비 오르는지/내리는지 예측.",
+  [1, 2],
+  "Harries, 1999"
+);
+
+export const SCENARIOS = {
+  cls: [...CLS, agrScenario("agr_a", "AGR_a", "abrupt"), agrScenario("agr_g", "AGR_g", "gradual"), NOAA, ELEC],
+  reg: [...REG, FRIED],
+};
+
+// Load a quantized real-world stream: features are rank-quantized to 0..255 and mapped to [-1, 1].
+const realCache = new Map();
+export function loadReal(sc) {
+  if (!realCache.has(sc.id)) {
+    realCache.set(
+      sc.id,
+      fetch(sc.file)
+        .then((r) => {
+          if (!r.ok) throw new Error(r.status + " " + sc.file);
+          return r.json();
+        })
+        .then((j) => {
+          const dec = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+          const Q = dec(j.X);
+          const X = new Float32Array(Q.length);
+          for (let i = 0; i < Q.length; i++) X[i] = (Q[i] / 255) * 2 - 1;
+          const y = Float32Array.from(dec(j.y));
+          sc.dim = j.d;
+          sc.n = j.n;
+          sc.features = j.names.map((name, f) => ({
+            name,
+            // x <= t  <=>  q <= floor(q_t): report the largest raw value in that bucket
+            raw: (v) => j.qv[f][Math.max(0, Math.min(255, Math.floor(((v + 1) / 2) * 255 + 1e-6)))],
+          }));
+          return { X, y, n: j.n, d: j.d };
+        })
+    );
+  }
+  return realCache.get(sc.id);
+}
 
 // Concept schedule. Returns { phase(t, rng) for sampling, display(t) for drawing, changes: [t...] }.
 export function schedule(kind, T, period) {

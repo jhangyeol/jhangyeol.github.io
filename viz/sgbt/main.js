@@ -1,4 +1,4 @@
-import { SCENARIOS } from "./data.js";
+import { SCENARIOS, loadReal } from "./data.js";
 import { DEFAULTS, predictSnap, leafIndexSnap } from "./sgbt.js";
 import { runSimulation } from "./sim.js";
 import { INFO } from "./info.js";
@@ -7,8 +7,10 @@ const $ = (id) => document.getElementById(id);
 const LO = -1.2;
 const HI = 1.2;
 const GRID = 150;
+const TGRID = 90;
 const POINT_WINDOW = 320;
 const BASE_FPS = 15;
+const MAX_LEN = 30000;
 const SUB = ["₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"];
 const sub = (n) =>
   String(n)
@@ -19,8 +21,13 @@ const fmtK = (n) => (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(
 const fmtT = (n) => Math.round(n).toLocaleString("en-US");
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const sigmoid = (z) => 1 / (1 + Math.exp(-z));
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const FEAT_PALETTE = ["#109a8e", "#8a5cf0", "#c99a06", "#d6408a", "#3a86ff", "#7a8b10", "#a0522d", "#0aa2c0", "#b04ad8", "#5b6b7f"];
 
 const PDEF = [
+  { k: "length", label: "Stream length", min: 2000, max: MAX_LEN, step: 1000, cfg: true },
+  { k: "period", label: "Concept period", min: 500, max: 10000, step: 250, cfg: true, synthOnly: true },
+  { k: "noise", label: "Noise", min: 0, max: 0.3, step: 0.01, cfg: true, synthOnly: true },
   { k: "trees", label: "Trees (S)", min: 1, max: 20, step: 1 },
   { k: "eta", label: "Learning rate η", min: 0.05, max: 1, step: 0.05 },
   { k: "grace", label: "Grace period", min: 20, max: 300, step: 10 },
@@ -30,8 +37,6 @@ const PDEF = [
   { k: "maxDepth", label: "Max depth", min: 1, max: 8, step: 1 },
   { k: "replace", label: "Tree replacement", bool: true },
   { k: "sensitivity", label: "Detector sensitivity", min: 0.5, max: 2, step: 0.1 },
-  { k: "noise", label: "Noise", min: 0, max: 0.3, step: 0.01, cfg: true },
-  { k: "period", label: "Concept period", min: 500, max: 3000, step: 250, cfg: true },
 ];
 
 const S = {
@@ -40,11 +45,13 @@ const S = {
   drift: "abrupt",
   noise: { cls: 0.05, reg: 0.1 },
   period: 1500,
+  lengthSyn: 6000,
+  lengthReal: MAX_LEN,
   seed: 7,
   params: { ...DEFAULTS },
+  axes: {},
   run: null,
   fi: 0,
-  prevFi: 0,
   playing: false,
   speed: 1,
   show: { boundary: true, truth: true, points: true },
@@ -52,6 +59,9 @@ const S = {
   overlay: "ensemble",
   hoverLeaf: null,
 };
+
+const scen = () => SCENARIOS[S.task].find((s) => s.id === S.scenario[S.task]);
+const axesOf = (sc) => S.axes[sc.id] || sc.axes || [0, 1];
 
 let C = {};
 function readColors() {
@@ -70,41 +80,77 @@ function readColors() {
   C.midRGB = rgb(C.card);
 }
 
-// v in [-1, 1] -> rgb mixed from card color toward neg/pos with intensity t
 function divColor(v, t) {
   const c = v < 0 ? C.negRGB : C.posRGB;
   const m = C.midRGB;
   return [m[0] + (c[0] - m[0]) * t, m[1] + (c[1] - m[1]) * t, m[2] + (c[2] - m[2]) * t];
 }
 const css = (rgb, a = 1) => `rgba(${rgb[0] | 0},${rgb[1] | 0},${rgb[2] | 0},${a})`;
+const featColor = (f) => (S.run && S.run.d === 2 ? [C.f1, C.f2][f] : FEAT_PALETTE[f % FEAT_PALETTE.length]);
+
+function fmtRaw(feat, v) {
+  const r = feat.raw(v);
+  if (feat.fmt) return feat.fmt(r);
+  const a = Math.abs(r);
+  if (a >= 10000) return (r / 1000).toFixed(0) + "k";
+  if (a >= 100) return r.toFixed(0);
+  if (a >= 10) return r.toFixed(1);
+  return r.toFixed(2);
+}
 
 // ---------------------------------------------------------------- run
-function rerun(keep = true) {
+let runToken = 0;
+async function rerun(keep = true) {
+  const sc = scen();
+  const tok = ++runToken;
   const n0 = S.run ? S.run.frames.length - 1 : 1;
   const ratio = keep && S.run ? S.fi / n0 : 0;
-  const T = S.period * 4;
-  const run = runSimulation({
-    task: S.task,
-    scenario: S.scenario[S.task],
-    drift: S.drift,
-    T,
-    period: S.period,
-    noise: S.noise[S.task],
-    every: Math.max(10, Math.round(T / 300)),
-    seed: S.seed,
-    params: { ...S.params },
-  });
+  let real = null;
+  if (sc.real) {
+    setStatus("데이터 불러오는 중…");
+    try {
+      real = await loadReal(sc);
+    } catch (e) {
+      setStatus("데이터를 불러오지 못했습니다: " + e.message);
+      return;
+    }
+    if (tok !== runToken) return;
+  }
+  setStatus("");
+  const T = sc.real ? Math.min(S.lengthReal, real.n) : S.lengthSyn;
+  const run = runSimulation(
+    {
+      task: S.task,
+      scenario: sc.id,
+      drift: sc.fixedDrift || S.drift,
+      T,
+      period: S.period,
+      noise: S.noise[S.task],
+      every: Math.max(10, Math.round(T / 300)),
+      seed: S.seed,
+      params: { ...S.params },
+    },
+    sc,
+    real
+  );
   derive(run);
   S.run = run;
   S.fi = Math.round(ratio * (run.frames.length - 1));
-  S.prevFi = S.fi;
   S.sel = null;
   S.overlay = "ensemble";
   closeDrawer();
   $("scrub").max = run.frames.length - 1;
+  syncDatasetUI();
   buildCards();
   layoutTimeline();
   render(false);
+  return run;
+}
+
+function setStatus(msg) {
+  const el = $("status");
+  el.textContent = msg;
+  el.style.display = msg ? "flex" : "none";
 }
 
 function derive(run) {
@@ -117,14 +163,13 @@ function derive(run) {
   const open = new Map();
   for (const e of run.events) {
     if (e.type === "warn") {
-      const span = { from: e.t, to: null, end: "open", altId: e.altId };
+      const span = { from: e.t, to: null };
       run.warns[e.slot].push(span);
       open.set(e.slot, span);
     } else if (e.type === "cancel" || e.type === "swap") {
       const span = open.get(e.slot);
       if (span) {
         span.to = e.t;
-        span.end = e.type;
         open.delete(e.slot);
       }
     }
@@ -143,15 +188,32 @@ function derive(run) {
     run.vmax = Math.max(0.5, a[Math.floor(a.length * 0.98)]);
   } else run.vmax = 1;
   run.leafScale = run.cfg.task === "cls" ? 0.6 : run.vmax * 0.35;
-  const lo = Math.min(...run.frames.slice(1).flatMap((f) => [f.metric, f.baseMetric]));
-  const hi = Math.max(...run.frames.slice(1).flatMap((f) => [f.metric, f.baseMetric]));
+  const vals = run.frames.slice(1).flatMap((f) => [f.metric, f.baseMetric, f.cumMetric, f.cumBase]);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
   run.yr = run.cfg.task === "cls" ? [Math.max(0, Math.floor(lo * 10) / 10), 1] : [0, Math.ceil(hi * 11) / 10];
+  run.sliceCache = new Map();
 }
 
 const frame = () => S.run.frames[S.fi];
+const lifeOf = (slot, id) => S.run.life[slot].find((l) => l.id === id);
 
-function lifeOf(slot, id) {
-  return S.run.life[slot].find((l) => l.id === id);
+// first frame whose time is after sample t (so events at t are included)
+function frameAfter(t) {
+  const F = S.run.frames;
+  let lo = 0;
+  let hi = F.length - 1;
+  while (lo < hi) {
+    const m = (lo + hi) >> 1;
+    if (F[m].t > t) hi = m;
+    else lo = m + 1;
+  }
+  return lo;
+}
+function frameNear(t) {
+  const i = frameAfter(t);
+  const F = S.run.frames;
+  return i > 0 && Math.abs(F[i - 1].t - t) < Math.abs(F[i].t - t) ? i - 1 : i;
 }
 
 // ---------------------------------------------------------------- selection
@@ -166,37 +228,56 @@ function resolveSel(fr) {
   return { snap: null, status: "unborn" };
 }
 
-function regionsOf(snap) {
-  if (snap._regions) return snap._regions;
+// ---------------------------------------------------------------- slice (for d > 2)
+function sliceAt(fi) {
+  const run = S.run;
+  if (run.sliceCache.has(fi)) return run.sliceCache.get(fi);
+  const d = run.d;
+  const t1 = Math.max(1, run.frames[fi].t);
+  const t0 = Math.max(0, t1 - POINT_WINDOW);
+  const out = new Array(d);
+  const buf = [];
+  for (let f = 0; f < d; f++) {
+    buf.length = 0;
+    for (let t = t0; t < t1; t++) buf.push(run.xs[t * d + f]);
+    buf.sort((a, b) => a - b);
+    out[f] = buf.length ? buf[buf.length >> 1] : 0;
+  }
+  run.sliceCache.set(fi, out);
+  return out;
+}
+
+// Leaf regions of a tree inside the current 2-D slice (axes a, b; other features fixed at slice).
+function regionsOf(snap, axes, slice) {
+  const [a, b] = axes;
   const out = new Map();
   const walk = (i, x0, x1, y0, y1) => {
     const nd = snap.nodes[i];
     if (nd[0] < 0) {
-      out.set(i, [x0, x1, y0, y1]);
+      if (x1 > x0 && y1 > y0) out.set(i, [x0, x1, y0, y1]);
       return;
     }
-    if (nd[0] === 0) {
-      walk(nd[2], x0, Math.min(x1, nd[1]), y0, y1);
-      walk(nd[3], Math.max(x0, nd[1]), x1, y0, y1);
-    } else {
-      walk(nd[2], x0, x1, y0, Math.min(y1, nd[1]));
-      walk(nd[3], x0, x1, Math.max(y0, nd[1]), y1);
-    }
+    const f = nd[0];
+    const th = nd[1];
+    if (f === a) {
+      walk(nd[2], x0, Math.min(x1, th), y0, y1);
+      walk(nd[3], Math.max(x0, th), x1, y0, y1);
+    } else if (f === b) {
+      walk(nd[2], x0, x1, y0, Math.min(y1, th));
+      walk(nd[3], x0, x1, Math.max(y0, th), y1);
+    } else walk(slice[f] <= th ? nd[2] : nd[3], x0, x1, y0, y1);
   };
   walk(0, LO, HI, LO, HI);
-  Object.defineProperty(snap, "_regions", { value: out, enumerable: false });
   return out;
 }
 
 // ---------------------------------------------------------------- plot
 const plot = $("plot");
-const pctx = plot.getContext("2d");
 const hm = document.createElement("canvas");
 hm.width = hm.height = GRID;
 const hctx = hm.getContext("2d");
-let plotW = 0;
-let gridCache = { key: "", vals: null };
-let truthCache = { key: "", vals: null };
+let gridCache = { key: "" };
+let truthCache = { key: "" };
 
 function sizeCanvas(cv, w, h) {
   const d = window.devicePixelRatio || 1;
@@ -212,44 +293,59 @@ function sizeCanvas(cv, w, h) {
 const cellX = (i, N) => LO + ((i + 0.5) * (HI - LO)) / N;
 const cellY = (j, N) => HI - ((j + 0.5) * (HI - LO)) / N;
 
-// What the background shows: returns { vals (in [-1,1]-ish), kind }
 function overlaySpec(fr) {
   const r = resolveSel(fr);
-  const eta = S.run.cfg.params.eta;
   if (S.sel && r && r.snap && S.overlay === "tree") return { kind: "tree", trees: [r.snap], key: "t" + r.snap.id + ":" + r.snap.n };
   if (S.sel && r && r.snap && S.overlay === "upto" && (r.status === "active" || r.status === "warn"))
     return { kind: "upto", trees: fr.trees.slice(0, S.sel.slot + 1), key: "u" + S.sel.slot };
-  return { kind: "ens", trees: fr.trees, key: "e", eta };
+  return { kind: "ens", trees: fr.trees, key: "e" };
 }
 
-function gridValues(fr, spec) {
-  const key = S.fi + "|" + spec.key + "|" + S.run.cfg.seed;
+function baseVec() {
+  return S.run.d > 2 ? sliceAt(S.fi).slice() : [0, 0];
+}
+
+function gridValues(spec, axes) {
+  const key = [S.fi, spec.key, axes.join(",")].join("|");
   if (gridCache.key === key && gridCache.run === S.run) return gridCache.vals;
   const N = GRID;
   const eta = S.run.cfg.params.eta;
   const F = new Float32Array(N * N);
+  const v = baseVec();
+  const [a, b] = axes;
   for (const tr of spec.trees) {
     for (let j = 0; j < N; j++) {
-      const y = cellY(j, N);
-      for (let i = 0; i < N; i++) F[j * N + i] += eta * predictSnap(tr, cellX(i, N), y);
+      v[b] = cellY(j, N);
+      for (let i = 0; i < N; i++) {
+        v[a] = cellX(i, N);
+        F[j * N + i] += eta * predictSnap(tr, v);
+      }
     }
   }
   gridCache = { key, vals: F, run: S.run };
   return F;
 }
 
-function truthValues(phase) {
-  const N = 90;
-  const key = phase.toFixed(3);
-  if (truthCache.key === key && truthCache.run === S.run) return truthCache.vals;
-  const v = new Float32Array(N * N);
+function truthValues(phase, axes) {
   const sc = S.run.sc;
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) v[j * N + i] = sc.truth(cellX(i, N), cellY(j, N), phase);
-  truthCache = { key, vals: v, run: S.run };
-  return v;
+  const N = TGRID;
+  const key = [phase.toFixed(3), axes.join(","), S.run.d > 2 ? S.fi : ""].join("|");
+  if (truthCache.key === key && truthCache.run === S.run) return truthCache.vals;
+  const out = new Float32Array(N * N);
+  const v = baseVec();
+  const [a, b] = axes;
+  for (let j = 0; j < N; j++) {
+    v[b] = cellY(j, N);
+    for (let i = 0; i < N; i++) {
+      v[a] = cellX(i, N);
+      out[j * N + i] = sc.truthVec(v, phase);
+    }
+  }
+  truthCache = { key, vals: out, run: S.run };
+  return out;
 }
 
-// marching squares on cell-centre grid
+// marching squares on a cell-centre grid
 const MS = [
   [],
   [[3, 2]],
@@ -325,8 +421,10 @@ function regLevels() {
 function renderPlot() {
   const run = S.run;
   const fr = frame();
+  const sc = run.sc;
+  const axes = axesOf(sc);
+  const [a, b] = axes;
   const W = plot.parentElement.clientWidth;
-  plotW = W;
   const ctx = sizeCanvas(plot, W, W);
   const toPx = (x) => ((x - LO) / (HI - LO)) * W;
   const toPy = (y) => ((HI - y) / (HI - LO)) * W;
@@ -336,7 +434,7 @@ function renderPlot() {
   ctx.fillRect(0, 0, W, W);
 
   const spec = overlaySpec(fr);
-  const F = gridValues(fr, spec);
+  const F = gridValues(spec, axes);
   const N = GRID;
   let treeScale = 1;
   if (spec.kind === "tree") {
@@ -369,7 +467,7 @@ function renderPlot() {
     ctx.drawImage(hm, 0, 0, W, W);
   }
 
-  // axes
+  // grid
   ctx.strokeStyle = C.line;
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -381,7 +479,6 @@ function renderPlot() {
   }
   ctx.stroke();
 
-  // model contours
   if (S.show.boundary && spec.kind !== "tree") {
     ctx.strokeStyle = C.ink;
     if (isCls) {
@@ -396,28 +493,27 @@ function renderPlot() {
       ctx.globalAlpha = 1;
     }
   }
-  // truth
-  if (S.show.truth) {
+  if (S.show.truth && sc.truthVec) {
     const ph = run.sch.display(Math.max(0, fr.t - 1));
-    const tv = truthValues(ph);
+    const tv = truthValues(ph, axes);
     ctx.setLineDash([5, 4]);
     ctx.strokeStyle = C.ink;
     if (isCls) {
       ctx.lineWidth = 1.5;
       ctx.globalAlpha = 0.7;
-      contour(ctx, tv, 90, 0.5, W);
+      contour(ctx, tv, TGRID, 0.5, W);
     } else {
       ctx.lineWidth = 1;
       ctx.globalAlpha = 0.45;
-      for (const l of regLevels()) contour(ctx, tv, 90, l, W);
+      for (const l of regLevels()) contour(ctx, tv, TGRID, l, W);
     }
     ctx.globalAlpha = 1;
     ctx.setLineDash([]);
   }
-  // selected tree partition
+  // selected tree partition (within the slice)
   const r = resolveSel(fr);
   if (r && r.snap) {
-    const regs = regionsOf(r.snap);
+    const regs = regionsOf(r.snap, axes, baseVec());
     ctx.strokeStyle = C.ink;
     ctx.lineWidth = 1;
     ctx.globalAlpha = 0.55;
@@ -433,18 +529,21 @@ function renderPlot() {
       ctx.strokeRect(toPx(x0), toPy(y1), toPx(x1) - toPx(x0), toPy(y0) - toPy(y1));
     }
   }
-  // points
   if (S.show.points) {
+    const d = run.d;
     const t1 = fr.t;
     const t0 = Math.max(0, t1 - POINT_WINDOW);
     const rad = W < 420 ? 2.4 : 3.1;
     for (let t = t0; t < t1; t++) {
-      const a = 0.18 + 0.82 * ((t - t0 + 1) / POINT_WINDOW) ** 1.4;
-      const x = toPx(run.xs[2 * t]);
-      const y = toPy(run.xs[2 * t + 1]);
+      const al = 0.18 + 0.82 * ((t - t0 + 1) / POINT_WINDOW) ** 1.4;
+      // tiny deterministic jitter so quantized / discrete features don't stack exactly
+      const jx = d > 2 ? (((t * 7919) % 97) / 97 - 0.5) * 0.012 : 0;
+      const jy = d > 2 ? (((t * 104729) % 89) / 89 - 0.5) * 0.012 : 0;
+      const x = toPx(run.xs[t * d + a] + jx);
+      const y = toPy(run.xs[t * d + b] + jy);
       const yv = run.ys[t];
       const col = isCls ? (yv > 0.5 ? C.posRGB : C.negRGB) : divColor(yv / run.vmax, Math.min(1, Math.abs(yv / run.vmax)) * 0.85 + 0.15);
-      ctx.globalAlpha = a;
+      ctx.globalAlpha = al;
       ctx.beginPath();
       ctx.arc(x, y, rad, 0, Math.PI * 2);
       ctx.fillStyle = css(col);
@@ -455,15 +554,26 @@ function renderPlot() {
     }
     ctx.globalAlpha = 1;
   }
-  // axis labels
+  // axis names + raw ticks
+  const fa = sc.features[a];
+  const fb = sc.features[b];
+  ctx.font = "10.5px -apple-system, sans-serif";
   ctx.fillStyle = C.muted;
-  ctx.font = "11px -apple-system, sans-serif";
-  ctx.fillText("x₁ →", W - 34, W - 6);
+  ctx.textAlign = "center";
+  for (const g of [-1, 0, 1]) ctx.fillText(fmtRaw(fa, g), toPx(g), W - 5);
+  ctx.textAlign = "left";
+  for (const g of [-1, 0, 1]) ctx.fillText(fmtRaw(fb, g), 4, toPy(g) - 4);
+  ctx.font = "600 11px -apple-system, sans-serif";
+  ctx.fillStyle = C.ink;
+  ctx.textAlign = "right";
+  ctx.fillText(fa.name + " →", W - 6, W - 18);
   ctx.save();
-  ctx.translate(12, 36);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText("x₂ →", 0, 0);
+  ctx.translate(16, 8);
+  ctx.rotate(Math.PI / 2);
+  ctx.textAlign = "left";
+  ctx.fillText(fb.name + " →", 0, 0);
   ctx.restore();
+  ctx.textAlign = "left";
 
   renderLegend(spec, treeScale);
 }
@@ -471,7 +581,6 @@ function renderPlot() {
 let legendKey = "";
 function renderLegend(spec, treeScale) {
   const isCls = S.run.cfg.task === "cls";
-  const grad = (a, b) => `linear-gradient(90deg, ${C.neg}, ${C.card}, ${C.pos})`;
   let left;
   let right;
   let mid = "";
@@ -488,12 +597,13 @@ function renderLegend(spec, treeScale) {
     right = "+" + S.run.vmax.toFixed(1);
     mid = spec.kind === "upto" ? `F${sub(S.sel.slot + 1)}(x)` : "ŷ";
   }
-  const key = [left, right, mid, spec.kind].join("|");
+  const truth = S.run.sc.truthVec ? `<span class="key"><i class="dash"></i>true</span>` : "";
+  const key = [left, right, mid, spec.kind, truth, C.card].join("|");
   if (key === legendKey) return;
   legendKey = key;
-  $("legend").innerHTML = `<span class="num">${left}</span><span class="grad" style="background:${grad()}"></span><span class="num">${right}</span>
-    <span class="muted">${mid}</span>
-    <span class="key"><i></i>model</span><span class="key"><i class="dash"></i>true</span>`;
+  $("legend").innerHTML =
+    `<span class="num">${left}</span><span class="grad" style="background:linear-gradient(90deg, ${C.neg}, ${C.card}, ${C.pos})"></span><span class="num">${right}</span>
+    <span class="muted">${mid}</span><span class="key"><i></i>model</span>${truth}`;
 }
 
 // ---------------------------------------------------------------- mini trees
@@ -551,12 +661,11 @@ function drawMini(cv, snap, opts = {}) {
       const v = clamp((eta * nd[4]) / S.run.leafScale, -1, 1);
       ctx.arc(X(pos[i][0]), Y(pos[i][1]), r, 0, Math.PI * 2);
       ctx.fillStyle = css(divColor(v, 0.25 + 0.75 * Math.abs(v)));
-      ctx.fill();
     } else {
       ctx.arc(X(pos[i][0]), Y(pos[i][1]), r * 0.8, 0, Math.PI * 2);
-      ctx.fillStyle = nd[0] === 0 ? C.f1 : C.f2;
-      ctx.fill();
+      ctx.fillStyle = featColor(nd[0]);
     }
+    ctx.fill();
   }
 }
 
@@ -573,13 +682,10 @@ function buildCards() {
         <div class="tc-top"><span class="k">#${k + 1}</span><b class="id num"></b><span class="badge">new</span></div>
         <canvas class="mini"></canvas>
         <div class="tc-meta num"><span class="lv"></span><span class="age"></span></div>
-        <div class="meter" title="drift detector: 단기/장기 오차 비율"><div class="fill"></div><div class="tick w"></div><div class="tick d"></div></div>
+        <div class="meter" title="drift detector"><div class="fill"></div><div class="tick w"></div><div class="tick d"></div></div>
       </div>
       <div class="alt" title="백그라운드 트리 (클릭하여 보기)"><canvas></canvas><span class="num"></span></div>`;
-    el.querySelector(".tcard").addEventListener("click", () => {
-      const fr = frame();
-      openDrawer({ id: fr.trees[k].id, slot: k });
-    });
+    el.querySelector(".tcard").addEventListener("click", () => openDrawer({ id: frame().trees[k].id, slot: k }));
     el.querySelector(".alt").addEventListener("click", (e) => {
       e.stopPropagation();
       const fr = frame();
@@ -590,12 +696,17 @@ function buildCards() {
   }
 }
 
+// detector level: 1.0 = drift line, 0.5 = warning line (both the ratio and the z-score must pass)
+function detLevel(d, p) {
+  if (!d || !(d.es > 0)) return 0;
+  const ratio = (d.ef / d.es - 1) / (0.9 / p.sensitivity);
+  const z = (d.z || 0) / ((2 * p.zWarn) / p.sensitivity);
+  return Math.max(0, Math.min(ratio, z));
+}
+
 function renderCards(animate) {
   const fr = frame();
   const p = S.run.cfg.params;
-  const wK = 0.45 / p.sensitivity;
-  const dK = 0.9 / p.sensitivity;
-  const scale = dK * 1.25;
   for (let k = 0; k < slots.length; k++) {
     const el = slots[k];
     const tr = fr.trees[k];
@@ -622,44 +733,39 @@ function renderCards(animate) {
     el.querySelector(".id").textContent = "T" + tr.id;
     el.querySelector(".lv").textContent = tr.leaves + (tr.leaves === 1 ? " leaf" : " leaves");
     el.querySelector(".age").textContent = "age " + fmtK(fr.t - since);
-    el.classList.toggle("fresh", since > 0 && fr.t - since < 400);
+    el.classList.toggle("fresh", since > 0 && fr.t - since < Math.max(400, S.run.cfg.T / 20));
     const d = fr.det[k];
     const warn = d.state === "warn";
     el.classList.toggle("warn", warn);
     el.classList.toggle("sel", !!S.sel && S.sel.slot === k);
     drawMini(card.querySelector("canvas"), tr);
-    // meter
     const m = el.querySelector(".meter");
     const cold = !p.replace || d.cnt < p.minAge;
     m.classList.toggle("cold", cold);
-    const ratio = d.es > 0 ? d.ef / d.es - 1 : 0;
-    const fill = clamp(ratio / scale, 0, 1);
+    const lv = detLevel(d, p);
     const f = m.querySelector(".fill");
-    f.style.width = (cold ? 0 : fill * 100) + "%";
-    f.style.background = ratio > dK ? C.drift : ratio > wK ? C.warn : C.ok;
-    const tw = m.querySelector(".w");
-    const td = m.querySelector(".d");
-    tw.style.left = (wK / scale) * 100 + "%";
-    tw.style.background = C.warn;
-    td.style.left = (dK / scale) * 100 + "%";
-    td.style.background = C.drift;
-    // alt
+    f.style.width = (cold ? 0 : clamp(lv / 1.25, 0, 1) * 100) + "%";
+    f.style.background = lv >= 1 ? C.drift : lv >= 0.5 ? C.warn : C.ok;
+    m.querySelector(".w").style.cssText = `left:40%;background:${C.warn}`;
+    m.querySelector(".d").style.cssText = `left:80%;background:${C.drift}`;
+    const altEl = el.querySelector(".alt");
     if (warn && fr.alts[k]) {
-      const a = fr.alts[k];
-      drawMini(el.querySelector(".alt canvas"), a, { small: true, dashed: true });
-      el.querySelector(".alt span").textContent = `bg T${a.id} · ${fmtK(a.n)}`;
+      const alt = fr.alts[k];
+      drawMini(altEl.querySelector("canvas"), alt, { small: true, dashed: true });
+      altEl.querySelector("span").textContent = `bg T${alt.id} · ${fmtK(alt.n)}`;
     }
   }
 }
 
 // ---------------------------------------------------------------- log & stats
-let logCount = -1;
+let logKey = "";
 function renderLog() {
   const t = frame().t;
   const list = S.run.swaps.filter((e) => e.t < t);
   $("swapCount").textContent = `${list.length} / ${S.run.swaps.length}`;
-  if (list.length === logCount) return;
-  logCount = list.length;
+  const key = S.run.cfg.seed + ":" + list.length + ":" + S.run.frames.length + ":" + S.run.swaps.length + ":" + S.run.sc.id;
+  if (key === logKey) return;
+  logKey = key;
   const ol = $("log");
   if (!list.length) {
     ol.innerHTML = `<li class="empty">${S.run.cfg.params.replace ? "아직 교체 없음" : "Tree replacement 꺼짐"}</li>`;
@@ -678,26 +784,34 @@ function renderLog() {
     .join("");
 }
 
+function conceptLabel(t) {
+  const run = S.run;
+  const sc = run.sc;
+  if (sc.real) return "Real stream";
+  if ((sc.fixedDrift || run.cfg.drift) === "none") return "Stationary";
+  const ph = run.sch.display(Math.max(0, t - 1));
+  const i = Math.floor(ph + 1e-6);
+  const frac = ph - i;
+  const name = sc.conceptName ? ` · ${sc.conceptName(i)}` : "";
+  return frac > 0.02 ? `Concept ${i + 1} → ${i + 2}` : `Concept ${i + 1}${name}`;
+}
+
 function renderStats() {
   const fr = frame();
   const isCls = S.run.cfg.task === "cls";
   const f = (v) => (v == null ? "–" : isCls ? (v * 100).toFixed(1) + "%" : v.toFixed(3));
+  const m = isCls ? "Accuracy" : "RMSE";
   const swaps = S.run.swaps.filter((e) => e.t < fr.t).length;
-  $("stats").innerHTML = `<div>${isCls ? "Accuracy" : "RMSE"} (last 200)<b>${f(fr.metric)}</b></div>
-    <div class="base">w/o replacement<b>${f(fr.baseMetric)}</b></div>
-    <div>Swaps<b>${swaps}</b></div>
-    <div>Total leaves<b>${fr.trees.reduce((s, t) => s + t.leaves, 0)}</b></div>`;
-  const T = S.run.cfg.T;
-  $("tlabel").textContent = `t = ${fmtT(fr.t)} / ${fmtT(T)}`;
+  $("stats").innerHTML = `<div class="st"><span>${m} · last 200</span><b>${f(fr.metric)}</b><em>w/o replacement ${f(fr.baseMetric)}</em></div>
+    <div class="st"><span>${m} · overall</span><b>${f(fr.cumMetric)}</b><em>w/o replacement ${f(fr.cumBase)}</em></div>
+    <div class="st sm"><span>Swaps</span><b>${swaps}</b><em>of ${S.run.swaps.length}</em></div>
+    <div class="st sm"><span>Leaves</span><b>${fr.trees.reduce((s, t) => s + t.leaves, 0)}</b><em>&nbsp;</em></div>`;
+  $("tlabel").textContent = `t = ${fmtT(fr.t)} / ${fmtT(S.run.cfg.T)}`;
   $("scrub").value = S.fi;
-  // concept label
-  const ph = S.run.sch.display(Math.max(0, fr.t - 1));
-  const i = Math.floor(ph + 1e-6);
-  const frac = ph - i;
-  const lab = S.run.cfg.drift === "none" ? "Stationary" : frac > 0.02 ? `Concept ${i + 1} → ${i + 2}` : `Concept ${i + 1}`;
+  const lab = conceptLabel(fr.t);
   const el = $("concept");
   if (el.textContent !== lab) {
-    if (S.playing && el.textContent) {
+    if (S.playing && el.textContent && !S.run.sc.real) {
       el.classList.add("flash");
       setTimeout(() => el.classList.remove("flash"), 700);
     }
@@ -711,10 +825,11 @@ const tlLayer = document.createElement("canvas");
 let TL = null;
 
 function layoutTimeline() {
+  if (!S.run) return;
   const W = tl.clientWidth || 800;
   const S_ = S.run.S;
   const rowH = S_ <= 12 ? 11 : 6;
-  const L = { W, padL: 30, padR: 8, top: 8, chartH: 110, gap: 22, rowH, rows: S_ };
+  const L = { W, padL: 34, padR: 8, top: 8, chartH: 110, gap: 22, rowH, rows: S_ };
   L.rowsTop = L.top + L.chartH + L.gap;
   L.H = L.rowsTop + S_ * rowH + 22;
   L.x = (t) => L.padL + (t / S.run.cfg.T) * (W - L.padL - L.padR);
@@ -734,21 +849,20 @@ function drawTimelineLayer(ctx, L) {
   const [y0, y1] = run.yr;
   const Y = (v) => L.top + L.chartH - ((v - y0) / (y1 - y0)) * L.chartH;
   const right = L.W - L.padR;
+  const bottom = L.rowsTop + L.rows * L.rowH;
   ctx.clearRect(0, 0, L.W, L.H);
   ctx.font = "10.5px -apple-system, sans-serif";
-  // concept windows / changes
   ctx.fillStyle = C.line;
-  for (const [a, b] of run.sch.windows || []) ctx.fillRect(L.x(a), L.top, L.x(b) - L.x(a), L.rowsTop + L.rows * L.rowH - L.top);
+  for (const [a, b] of run.sch.windows || []) ctx.fillRect(L.x(a), L.top, L.x(b) - L.x(a), bottom - L.top);
   ctx.strokeStyle = C.faint;
   ctx.setLineDash([3, 3]);
   ctx.beginPath();
   for (const c of run.sch.changes) {
     ctx.moveTo(L.x(c) + 0.5, L.top);
-    ctx.lineTo(L.x(c) + 0.5, L.rowsTop + L.rows * L.rowH);
+    ctx.lineTo(L.x(c) + 0.5, bottom);
   }
   ctx.stroke();
   ctx.setLineDash([]);
-  // y grid
   ctx.strokeStyle = C.line;
   ctx.fillStyle = C.muted;
   ctx.textAlign = "right";
@@ -760,10 +874,10 @@ function drawTimelineLayer(ctx, L) {
     ctx.fillText(run.cfg.task === "cls" ? Math.round(v * 100) + "%" : v.toFixed(2), L.padL - 4, Y(v) + 3.5);
   }
   ctx.stroke();
-  // lines
-  const line = (key, color, width, dash) => {
+  const line = (key, color, width, dash, alpha = 1) => {
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
+    ctx.globalAlpha = alpha;
     ctx.setLineDash(dash);
     ctx.beginPath();
     let started = false;
@@ -777,10 +891,12 @@ function drawTimelineLayer(ctx, L) {
     }
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
   };
+  line("cumBase", C.faint, 1.2, [1.5, 2.5]);
+  line("cumMetric", C.accent, 1.2, [1.5, 2.5], 0.8);
   line("baseMetric", C.faint, 1.5, [4, 3]);
   line("metric", C.accent, 2, []);
-  // rows
   for (let k = 0; k < L.rows; k++) {
     const yy = L.rowsTop + k * L.rowH;
     ctx.fillStyle = C.line;
@@ -791,18 +907,16 @@ function drawTimelineLayer(ctx, L) {
     ctx.globalAlpha = 1;
     if (L.rowH >= 10 || k % 5 === 0) {
       ctx.fillStyle = C.muted;
-      ctx.fillText("#" + (k + 1), L.padL - 4, yy + L.rowH - 0.5);
+      ctx.fillText("#" + (k + 1), L.padL - 4, yy + L.rowH - 1);
     }
   }
   ctx.fillStyle = C.drift;
   for (const e of run.swaps) ctx.fillRect(L.x(e.t) - 1, L.rowsTop + e.slot * L.rowH - 1, 2.5, L.rowH + 2);
-  // x axis
   ctx.textAlign = "center";
   ctx.fillStyle = C.muted;
-  const by = L.rowsTop + L.rows * L.rowH + 15;
-  for (let i = 0; i <= 4; i++) ctx.fillText(fmtK((T * i) / 4), L.x((T * i) / 4), by);
+  for (let i = 0; i <= 4; i++) ctx.fillText(fmtK((T * i) / 4), L.x((T * i) / 4), bottom + 15);
   ctx.textAlign = "left";
-  ctx.fillText("warning / swap per stage", L.padL, L.rowsTop - 4);
+  ctx.fillText("warning / swap per stage", L.padL, L.rowsTop - 5);
 }
 
 function renderTimeline() {
@@ -837,17 +951,22 @@ function renderTimeline() {
 function seekX(clientX) {
   const r = tl.getBoundingClientRect();
   const t = clamp(((clientX - r.left - TL.padL) / (TL.W - TL.padL - TL.padR)) * S.run.cfg.T, 0, S.run.cfg.T);
-  seek(Math.round((t / S.run.cfg.T) * (S.run.frames.length - 1)));
+  seek(frameNear(t));
 }
 
 // ---------------------------------------------------------------- drawer
 const drawer = $("drawer");
+const TV = { k: 1, tx: 0, ty: 0, fit: true, W: 1, H: 1 };
+let drawerKey = "";
+let treeKey = "";
+
 function openDrawer(sel) {
+  if (!S.sel || S.sel.id !== sel.id) TV.fit = true;
   S.sel = sel;
   S.hoverLeaf = null;
-  if (S.overlay === "upto" && !resolveSel(frame())) S.overlay = "ensemble";
   drawer.classList.add("open");
   drawerKey = "";
+  treeKey = "";
   render(false);
 }
 function closeDrawer() {
@@ -859,7 +978,6 @@ function closeDrawer() {
   }
 }
 
-let drawerKey = "";
 function renderDrawer() {
   if (!S.sel) return;
   const fr = frame();
@@ -875,7 +993,6 @@ function renderDrawer() {
   pill.className = "pill " + r.status;
   pill.textContent = labels[r.status];
   const run = S.run;
-  const eta = run.cfg.params.eta;
   const k = slot + 1;
   const life = lifeOf(slot, id);
   let lead = "";
@@ -885,92 +1002,194 @@ function renderDrawer() {
     }`;
   else if (r.status === "bg") lead = `#${k} 단계의 경고 이후 함께 학습 중인 백그라운드 트리. drift가 확정되면 이 트리가 투입됩니다.`;
   else if (r.status === "retired") lead = `t=${fmtT(r.ev.t)}에 drift 감지로 교체되어 퇴역 (→ T${r.ev.newId}). 아래는 퇴역 직전 모습.`;
-  else lead = `아직 생성되지 않은 트리입니다${life ? ` (t=${fmtT(life.bgFrom ?? life.from)}에 생성)` : ""}.`;
+  else lead = `아직 생성되지 않은 트리입니다${life ? ` (t=${fmtT(life.bgFrom ?? life.from)}에 생성)` : ""}. 시간을 앞으로 이동하면 나타납니다.`;
 
   let html = `<p class="lead">${lead}</p>`;
-  if ((r.status === "active" || r.status === "warn") && fr.alts[slot])
+  const canUpto = r.status === "active" || r.status === "warn";
+  if (canUpto && fr.alts[slot])
     html += `<div class="bgnote" data-alt="${fr.alts[slot].id}">⟳ 백그라운드 T${fr.alts[slot].id} 학습 중 · n=${fmtK(fr.alts[slot].n)} · ${
       fr.alts[slot].leaves
     } leaves <span style="margin-left:auto">보기 →</span></div>`;
-  if (snap) {
-    const canUpto = r.status === "active" || r.status === "warn";
-    if (S.overlay === "upto" && !canUpto) S.overlay = "ensemble";
-    html += `<div class="dsec"><h3>Plot overlay</h3><button class="info" data-info="overlay">i</button></div>
-      <div class="seg" id="ovl">
-        <button data-v="ensemble" class="${S.overlay === "ensemble" ? "on" : ""}">Ensemble</button>
-        <button data-v="tree" class="${S.overlay === "tree" ? "on" : ""}">This tree</button>
-        ${canUpto ? `<button data-v="upto" class="${S.overlay === "upto" ? "on" : ""}">Up to #${k}</button>` : ""}
-      </div>`;
-    const inSlot = life ? (r.status === "bg" ? null : life.from) : null;
-    const endT = r.status === "retired" ? r.ev.t : fr.t;
-    const det = r.det;
-    const ratio = det && det.es > 0 ? det.ef / det.es : null;
-    html += `<div class="kv num" style="margin-top:12px">
-      <div>born<b>t=${fmtT(snap.bornAt)}</b></div>
-      <div>${r.status === "bg" ? "bg age" : "in slot"}<b>${fmtK(endT - (inSlot ?? snap.bornAt))}</b></div>
-      <div>samples<b>${fmtK(snap.n)}</b></div>
-      <div>leaves<b>${snap.leaves}</b></div>
-      <div>depth<b>${snap.depth}</b></div>
-      <div>last split<b>${snap.lastSplitAt == null ? "–" : "t=" + fmtT(snap.lastSplitAt)}</b></div>
-      ${
-        ratio != null
-          ? `<div>error ratio<b>${
-              det.cnt < run.cfg.params.minAge ? "warming up" : ratio.toFixed(2) + "×"
-            }</b></div><div>fast err<b>${det.ef.toExponential(1)}</b></div><div>slow err<b>${det.es.toExponential(1)}</b></div>`
-          : ""
-      }
-    </div>`;
-    html += `<div class="dsec"><h3>Structure</h3><span class="muted" style="font-size:12px">잎에 마우스를 올리면 영역 표시</span></div>
-      <div class="treebox">${treeSVG(snap, eta)}</div>`;
-  } else {
-    html += `<div class="empty-tree">시간을 앞으로 이동하면 나타납니다.</div>`;
-  }
-  html += `<div class="dsec"><h3>Slot #${k} history</h3><button class="info" data-info="history">i</button></div>${historyBar(slot, fr.t)}`;
-  $("dBody").innerHTML = html;
+  if (S.overlay === "upto" && !canUpto) S.overlay = "ensemble";
+  html += `<div class="ovl-row"><div class="seg" id="ovl">
+      <button data-v="ensemble" class="${S.overlay === "ensemble" ? "on" : ""}">Ensemble</button>
+      <button data-v="tree" class="${S.overlay === "tree" ? "on" : ""}" ${snap ? "" : "disabled"}>This tree</button>
+      <button data-v="upto" class="${S.overlay === "upto" ? "on" : ""}" ${canUpto ? "" : "disabled"}>Up to #${k}</button>
+    </div><button class="info" data-info="overlay">i</button></div>`;
+  const det = r.det;
+  const p = run.cfg.params;
+  const dash = "–";
+  const inSlot = snap && life && r.status !== "bg" ? life.from : snap ? snap.bornAt : null;
+  const endT = r.status === "retired" ? r.ev.t : fr.t;
+  const warming = det && det.cnt < p.minAge;
+  html += `<div class="kv num">
+    <div>born<b>${snap ? "t=" + fmtT(snap.bornAt) : dash}</b></div>
+    <div>${r.status === "bg" ? "bg age" : "in slot"}<b>${snap ? fmtK(endT - inSlot) : dash}</b></div>
+    <div>samples<b>${snap ? fmtK(snap.n) : dash}</b></div>
+    <div>leaves<b>${snap ? snap.leaves : dash}</b></div>
+    <div>depth<b>${snap ? snap.depth : dash}</b></div>
+    <div>last split<b>${snap && snap.lastSplitAt != null ? "t=" + fmtT(snap.lastSplitAt) : dash}</b></div>
+    <div>error ratio<b>${det ? (warming ? "warming" : (det.ef / det.es).toFixed(2) + "×") : dash}</b></div>
+    <div>z-score<b>${det && !warming ? (det.z || 0).toFixed(1) : dash}</b></div>
+    <div>detector<b>${det && !warming ? Math.round(detLevel(det, p) * 100) + "%" : dash}</b></div>
+  </div>`;
+  $("dInfo").innerHTML = html;
+  const used = snap ? [...new Set(snap.nodes.filter((n) => n[0] >= 0).map((n) => n[0]))].sort((a, b) => a - b) : [];
+  $("dFeat").innerHTML = used
+    .map((f) => `<span class="fchip"><i style="background:${featColor(f)}"></i>${esc(run.sc.features[f].name)}</span>`)
+    .join("");
+  renderTree(snap);
+  $("dHist").innerHTML = `<div class="dsec"><h3>Slot #${k} history</h3><button class="info" data-info="history">i</button></div>${historyBar(
+    slot,
+    fr.t
+  )}`;
 }
 
-function treeSVG(snap, eta) {
-  const { pos, leaves, maxD } = layoutTree(snap);
-  const sx = Math.max(46, 400 / Math.max(1, leaves));
-  const sy = 58;
-  const W = Math.max(400, leaves * sx + 10);
-  const H = maxD * sy + 62;
-  const X = (p) => 5 + (p + 0.5) * sx;
-  const Y = (d) => 22 + d * sy;
+function renderTree(snap) {
+  const empty = $("tEmpty");
+  const g = $("tg");
+  if (!snap) {
+    g.innerHTML = "";
+    empty.style.display = "block";
+    treeKey = "";
+    return;
+  }
+  empty.style.display = "none";
+  const box = $("tbox");
+  const cw = box.clientWidth || 400;
+  const ch = box.clientHeight || 400;
+  const eta = S.run.cfg.params.eta;
+  // in fit mode pick whichever orientation fills the panel better
+  let orient = TV.orient || "tb";
+  if (TV.fit) {
+    const fitK = (o) => {
+      const { W, H } = treeSize(snap, o);
+      return Math.min((cw - 16) / W, (ch - 16) / H);
+    };
+    orient = fitK("lr") > fitK("tb") * 1.05 ? "lr" : "tb";
+  }
+  const key = snap.id + ":" + snap.n + ":" + snap.nodes.length + ":" + orient;
+  if (key !== treeKey) {
+    treeKey = key;
+    const { svg, W, H } = treeSVG(snap, eta, orient);
+    g.innerHTML = svg;
+    TV.W = W;
+    TV.H = H;
+    TV.orient = orient;
+  }
+  for (const el of g.querySelectorAll(".lf")) el.classList.toggle("hl", +el.dataset.leaf === S.hoverLeaf);
+  applyTV();
+}
+
+function applyTV() {
+  const box = $("tbox");
+  const cw = box.clientWidth;
+  const ch = box.clientHeight;
+  if (TV.fit && cw && ch) {
+    TV.k = Math.min((cw - 16) / TV.W, (ch - 16) / TV.H, 1.6);
+    TV.tx = (cw - TV.W * TV.k) / 2;
+    TV.ty = Math.max(8, (ch - TV.H * TV.k) / 2);
+  }
+  $("tg").setAttribute("transform", `translate(${TV.tx},${TV.ty}) scale(${TV.k})`);
+  $("tZoom").textContent = Math.round(TV.k * 100) + "%";
+}
+
+function zoomAt(mx, my, f) {
+  const k = clamp(TV.k * f, 0.03, 4);
+  TV.tx = mx - ((mx - TV.tx) * k) / TV.k;
+  TV.ty = my - ((my - TV.ty) * k) / TV.k;
+  TV.k = k;
+  TV.fit = false;
+  applyTV();
+}
+
+// Geometry shared by size estimation and drawing. Internal nodes are two-line boxes (feature / threshold).
+function treeGeom(snap, orient) {
+  const feats = S.run.sc.features;
   const N = snap.nodes;
+  const { pos, leaves, maxD } = layoutTree(snap);
+  const lines = N.map((nd) => (nd[0] >= 0 ? [feats[nd[0]].name, "≤ " + fmtRaw(feats[nd[0]], nd[1])] : null));
+  const boxW = (i) => Math.max(...lines[i].map((s) => s.length)) * 6.3 + 14;
+  const maxBox = Math.max(40, ...N.map((nd, i) => (nd[0] >= 0 ? boxW(i) : 0)));
+  let X;
+  let Y;
+  let W;
+  let H;
+  if (orient === "lr") {
+    const colW = maxBox + 34;
+    const rowH = 30;
+    X = (i) => 10 + maxBox / 2 + pos[i][1] * colW;
+    Y = (i) => 16 + (pos[i][0] + 0.5) * rowH;
+    W = 10 + maxBox / 2 + maxD * colW + 96;
+    H = leaves * rowH + 32;
+  } else {
+    const sx = 52;
+    const sy = 74;
+    X = (i) => 10 + (pos[i][0] + 0.5) * sx;
+    Y = (i) => 20 + pos[i][1] * sy;
+    W = Math.max(leaves * sx + 20, maxBox + 20);
+    H = maxD * sy + 60;
+  }
+  return { N, lines, boxW, X, Y, W, H };
+}
+
+function treeSize(snap, orient) {
+  const { W, H } = treeGeom(snap, orient);
+  return { W, H };
+}
+
+function treeSVG(snap, eta, orient) {
+  const { N, lines, boxW, X, Y, W, H } = treeGeom(snap, orient);
+  const lr = orient === "lr";
   let edges = "";
   let nodes = "";
   for (let i = 0; i < N.length; i++) {
     const nd = N[i];
-    const x = X(pos[i][0]);
-    const y = Y(pos[i][1]);
+    const x = X(i);
+    const y = Y(i);
     if (nd[0] >= 0) {
+      const w = boxW(i);
       for (const [c, lab] of [
         [nd[2], "≤"],
         [nd[3], ">"],
       ]) {
-        const cx = X(pos[c][0]);
-        const cy = Y(pos[c][1]);
-        edges += `<path d="M${x},${y + 10} C${x},${y + 30} ${cx},${cy - 30} ${cx},${cy - 10}" fill="none" stroke="${C.line2}" stroke-width="1.3"/>`;
-        edges += `<text x="${(x + cx) / 2 + (lab === "≤" ? -6 : 6)}" y="${(y + cy) / 2 + 2}" text-anchor="middle" style="fill:${
-          C.muted
-        };font-size:9.5px">${lab}</text>`;
+        const cx = X(c);
+        const cy = Y(c);
+        let d;
+        let lx;
+        let ly;
+        if (lr) {
+          const sx0 = x + w / 2;
+          const ex = cx - (N[c][0] >= 0 ? boxW(c) / 2 : 9);
+          d = `M${sx0},${y} C${sx0 + 18},${y} ${ex - 18},${cy} ${ex},${cy}`;
+          lx = (sx0 + ex) / 2;
+          ly = (y + cy) / 2 + (lab === "≤" ? -4 : 10);
+        } else {
+          d = `M${x},${y + 15} C${x},${y + 38} ${cx},${cy - 38} ${cx},${cy - (N[c][0] >= 0 ? 15 : 9)}`;
+          lx = (x + cx) / 2 + (lab === "≤" ? -7 : 7);
+          ly = (y + cy) / 2 + 2;
+        }
+        edges += `<path d="${d}" fill="none" stroke="${C.line2}" stroke-width="1.3"/>`;
+        edges += `<text x="${lx}" y="${ly}" text-anchor="middle" style="fill:${C.muted};font-size:9.5px">${lab}</text>`;
       }
-      const col = nd[0] === 0 ? C.f1 : C.f2;
-      nodes += `<g><title>split on x${sub(nd[0] + 1)} at t=${fmtT(nd[7] ?? 0)} · n=${fmtK(nd[5])}</title>
-        <rect x="${x - 31}" y="${y - 10}" width="62" height="20" rx="6" fill="${C.card}" stroke="${col}" stroke-width="1.5"/>
-        <text x="${x}" y="${y + 3.5}" text-anchor="middle">x${sub(nd[0] + 1)} ≤ ${nd[1].toFixed(2)}</text></g>`;
+      const col = featColor(nd[0]);
+      nodes += `<g><title>${esc(lines[i].join(" "))} · split at t=${fmtT(nd[7] ?? 0)} · n=${fmtK(nd[5])}</title>
+        <rect x="${x - w / 2}" y="${y - 15}" width="${w}" height="30" rx="7" fill="${C.card}" stroke="${col}" stroke-width="1.6"/>
+        <text x="${x}" y="${y - 2}" text-anchor="middle" style="font-weight:600">${esc(lines[i][0])}</text>
+        <text x="${x}" y="${y + 10}" text-anchor="middle">${esc(lines[i][1])}</text></g>`;
     } else {
       const v = clamp((eta * nd[4]) / S.run.leafScale, -1, 1);
-      nodes += `<g class="lf${S.hoverLeaf === i ? " hl" : ""}" data-leaf="${i}"><title>leaf · w=${nd[4].toFixed(3)} · η·w=${(eta * nd[4]).toFixed(
-        3
-      )} · n=${fmtK(nd[5])}</title>
-        <circle cx="${x}" cy="${y}" r="9" fill="${css(divColor(v, 0.3 + 0.7 * Math.abs(v)))}" stroke="${C.card}" stroke-width="1.5"/>
-        <text x="${x}" y="${y + 22}" text-anchor="middle">${(eta * nd[4]).toFixed(2)}</text>
-        <text x="${x}" y="${y + 33}" text-anchor="middle" style="fill:${C.muted};font-size:9.5px">n ${fmtK(nd[5])}</text></g>`;
+      const val = (eta * nd[4]).toFixed(2);
+      const txt = lr
+        ? `<text x="${x + 14}" y="${y + 3.5}">${val} <tspan style="fill:${C.muted};font-size:9.5px">n ${fmtK(nd[5])}</tspan></text>`
+        : `<text x="${x}" y="${y + 22}" text-anchor="middle">${val}</text><text x="${x}" y="${y + 33}" text-anchor="middle" style="fill:${
+            C.muted
+          };font-size:9.5px">n ${fmtK(nd[5])}</text>`;
+      nodes += `<g class="lf" data-leaf="${i}"><title>leaf · w=${nd[4].toFixed(3)} · η·w=${val} · n=${fmtK(nd[5])}</title>
+        <circle cx="${x}" cy="${y}" r="9" fill="${css(divColor(v, 0.3 + 0.7 * Math.abs(v)))}" stroke="${C.card}" stroke-width="1.5"/>${txt}</g>`;
     }
   }
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${edges}${nodes}</svg>`;
+  return { svg: edges + nodes, W, H };
 }
 
 function historyBar(slot, now) {
@@ -983,10 +1202,10 @@ function historyBar(slot, now) {
     const to = l.to ?? T;
     const col = palette[i % palette.length];
     if (l.bgFrom != null && l.bgFrom < l.from)
-      html += `<button class="seg" data-id="${l.id}" style="left:${pct(l.bgFrom)}%;width:${pct(
+      html += `<button class="hseg" data-id="${l.id}" style="left:${pct(l.bgFrom)}%;width:${pct(
         l.from - l.bgFrom
       )}%;background:${col};opacity:.35" title="T${l.id} background"></button>`;
-    html += `<button class="seg num" data-id="${l.id}" style="left:${pct(l.from)}%;width:calc(${pct(to - l.from)}% - 2px);background:${col};${
+    html += `<button class="hseg num" data-id="${l.id}" style="left:${pct(l.from)}%;width:calc(${pct(to - l.from)}% - 2px);background:${col};${
       S.sel && S.sel.id === l.id ? "outline:2px solid " + C.ink + ";outline-offset:1px" : ""
     }" title="T${l.id}: t=${fmtT(l.from)}–${fmtT(to)}">T${l.id}</button>`;
   });
@@ -1036,7 +1255,7 @@ const ICON_PAUSE = `<svg viewBox="0 0 16 16"><path d="M3 2h3.5v12H3zM9.5 2H13v12
 function setPlaying(on) {
   S.playing = on;
   $("bPlay").innerHTML = on ? ICON_PAUSE : ICON_PLAY;
-  if (on) {
+  if (on && S.run) {
     if (S.fi >= S.run.frames.length - 1) seek(0);
     last = 0;
     acc = 0;
@@ -1047,26 +1266,67 @@ function setPlaying(on) {
 // ---------------------------------------------------------------- controls
 function fillScenarios() {
   const sel = $("scenario");
-  sel.innerHTML = SCENARIOS[S.task].map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+  const groups = new Map();
+  for (const s of SCENARIOS[S.task]) {
+    if (!groups.has(s.group)) groups.set(s.group, []);
+    groups.get(s.group).push(s);
+  }
+  sel.innerHTML = [...groups]
+    .map(([g, list]) => `<optgroup label="${esc(g)}">${list.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</optgroup>`)
+    .join("");
   sel.value = S.scenario[S.task];
-  sel.title = SCENARIOS[S.task].find((s) => s.id === S.scenario[S.task]).desc;
+}
+
+function syncDatasetUI() {
+  const sc = scen();
+  const dsel = $("drift");
+  dsel.disabled = !!(sc.fixedDrift || sc.real);
+  dsel.value = sc.real ? "none" : sc.fixedDrift || S.drift;
+  $("dsDesc").textContent = sc.desc + (sc.source ? ` (${sc.source})` : "");
+  $("scenario").title = sc.desc;
+  $("chipTruth").style.display = sc.truthVec ? "" : "none";
+  const row = $("axes");
+  if (sc.dim > 2 && sc.features) {
+    const [a, b] = axesOf(sc);
+    const opts = (cur) => sc.features.map((f, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${esc(f.name)}</option>`).join("");
+    row.innerHTML = `<label>x <select data-ax="0">${opts(a)}</select></label><label>y <select data-ax="1">${opts(b)}</select></label>
+      <span class="muted">나머지 속성 = 최근 중앙값</span><button class="info" data-info="slice">i</button>`;
+    row.style.display = "flex";
+  } else {
+    row.style.display = "none";
+    row.innerHTML = "";
+  }
+  buildParams();
 }
 
 function syncTask() {
   for (const b of $("task").children) b.classList.toggle("on", b.dataset.v === S.task);
 }
 
+function paramValue(k) {
+  const sc = scen();
+  if (k === "noise") return S.noise[S.task];
+  if (k === "period") return S.period;
+  if (k === "length") return sc.real ? Math.min(S.lengthReal, sc.n || MAX_LEN) : S.lengthSyn;
+  return S.params[k];
+}
+
 function buildParams() {
+  const sc = scen();
   const box = $("prows");
-  box.innerHTML = PDEF.map((d) => {
-    if (d.bool)
-      return `<div class="prow"><label><input type="checkbox" data-k="${d.k}" ${S.params[d.k] ? "checked" : ""}/> ${
-        d.label
-      } <button class="info" data-info="${d.k}">i</button></label></div>`;
-    return `<div class="prow"><label>${d.label} <button class="info" data-info="${d.k}">i</button></label><output class="num" data-o="${d.k}"></output>
-      <input type="range" data-k="${d.k}" min="${d.min}" max="${d.max}" step="${d.step}"/></div>`;
-  }).join("");
-  for (const d of PDEF) {
+  const defs = PDEF.filter((d) => !(d.synthOnly && sc.real));
+  box.innerHTML = defs
+    .map((d) => {
+      if (d.bool)
+        return `<div class="prow"><label><input type="checkbox" data-k="${d.k}" ${S.params[d.k] ? "checked" : ""}/> ${
+          d.label
+        } <button class="info" data-info="${d.k}">i</button></label></div>`;
+      const max = d.k === "length" && sc.real && sc.n ? Math.min(MAX_LEN, sc.n) : d.max;
+      return `<div class="prow"><label>${d.label} <button class="info" data-info="${d.k}">i</button></label><output class="num" data-o="${d.k}"></output>
+      <input type="range" data-k="${d.k}" min="${d.min}" max="${max}" step="${d.step}"/></div>`;
+    })
+    .join("");
+  for (const d of defs) {
     const el = box.querySelector(`input[data-k="${d.k}"]`);
     if (d.bool) {
       el.addEventListener("change", () => {
@@ -1075,20 +1335,24 @@ function buildParams() {
       });
       continue;
     }
-    const get = () => (d.k === "noise" ? S.noise[S.task] : d.k === "period" ? S.period : S.params[d.k]);
     const out = box.querySelector(`[data-o="${d.k}"]`);
-    const show = (v) => (out.textContent = d.log ? v.toExponential(0) : d.step < 1 ? (+v).toFixed(2) : String(v));
-    el.value = d.log ? Math.log10(get()) : get();
-    show(get());
+    const show = (v) =>
+      (out.textContent = d.log ? v.toExponential(0) : d.k === "length" || d.k === "period" ? fmtT(v) : d.step < 1 ? (+v).toFixed(2) : String(v));
+    el.value = d.log ? Math.log10(paramValue(d.k)) : paramValue(d.k);
+    show(paramValue(d.k));
     let timer = 0;
     el.addEventListener("input", () => {
-      const v = d.log ? Math.pow(10, +el.value) : +el.value;
+      let v = d.log ? Math.pow(10, +el.value) : +el.value;
+      if (d.k === "length" && sc.real && sc.n && v > Math.min(MAX_LEN, sc.n) - d.step) v = Math.min(MAX_LEN, sc.n);
       if (d.k === "noise") S.noise[S.task] = v;
       else if (d.k === "period") S.period = v;
-      else S.params[d.k] = v;
+      else if (d.k === "length") {
+        if (sc.real) S.lengthReal = v;
+        else S.lengthSyn = v;
+      } else S.params[d.k] = v;
       show(v);
       clearTimeout(timer);
-      timer = setTimeout(() => rerun(), 120);
+      timer = setTimeout(() => rerun(), 150);
     });
   }
 }
@@ -1098,7 +1362,7 @@ function placeNear(el, anchor, w) {
   el.style.display = "block";
   const ew = el.offsetWidth || w;
   const eh = el.offsetHeight;
-  let x = clamp(r.left + r.width / 2 - ew / 2, 8, window.innerWidth - ew - 8);
+  const x = clamp(r.left + r.width / 2 - ew / 2, 8, window.innerWidth - ew - 8);
   let y = r.bottom + 8;
   if (y + eh > window.innerHeight - 8) y = Math.max(8, r.top - eh - 8);
   el.style.left = x + "px";
@@ -1119,6 +1383,13 @@ function showInfo(btn) {
   placeNear(pop, btn, 320);
 }
 
+function setHoverLeaf(v) {
+  if (v === S.hoverLeaf) return;
+  S.hoverLeaf = v;
+  for (const el of $("tg").querySelectorAll(".lf")) el.classList.toggle("hl", +el.dataset.leaf === v);
+  renderPlot();
+}
+
 function bind() {
   $("task").addEventListener("click", (e) => {
     const v = e.target.dataset.v;
@@ -1126,17 +1397,28 @@ function bind() {
     S.task = v;
     syncTask();
     fillScenarios();
-    buildParams();
     rerun(false);
   });
   $("scenario").addEventListener("change", (e) => {
     S.scenario[S.task] = e.target.value;
-    fillScenarios();
     rerun(false);
   });
   $("drift").addEventListener("change", (e) => {
     S.drift = e.target.value;
     rerun(false);
+  });
+  $("axes").addEventListener("change", (e) => {
+    const s = e.target.closest("select[data-ax]");
+    if (!s) return;
+    const sc = scen();
+    const ax = axesOf(sc).slice();
+    const i = +s.dataset.ax;
+    const v = +s.value;
+    if (ax[1 - i] === v) ax[1 - i] = ax[i];
+    ax[i] = v;
+    S.axes[sc.id] = ax;
+    syncDatasetUI();
+    render(false);
   });
   $("btnParams").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1171,101 +1453,136 @@ function bind() {
     }
   });
 
-  // drawer interactions (delegated)
+  // drawer
   $("dClose").addEventListener("click", closeDrawer);
-  $("dBody").addEventListener("click", (e) => {
+  $("dInfo").addEventListener("click", (e) => {
     const o = e.target.closest("#ovl button");
-    if (o) {
+    if (o && !o.disabled) {
       S.overlay = o.dataset.v;
       drawerKey = "";
       render(false);
       return;
     }
     const alt = e.target.closest(".bgnote");
-    if (alt) {
-      openDrawer({ id: +alt.dataset.alt, slot: S.sel.slot });
-      return;
-    }
-    const seg = e.target.closest(".hist .seg");
-    if (seg) {
-      const id = +seg.dataset.id;
-      const slot = S.sel.slot;
-      const l = lifeOf(slot, id);
-      S.sel = { id, slot };
-      // jump into the tree's lifetime if not visible now
-      const r = resolveSel(frame());
-      drawerKey = "";
-      if (!r.snap) {
-        const t = l.to != null ? l.to - 1 : l.from + 1;
-        seek(Math.ceil((t / S.run.cfg.T) * (S.run.frames.length - 1)));
-      } else render(false);
-    }
+    if (alt) openDrawer({ id: +alt.dataset.alt, slot: S.sel.slot });
   });
-  $("dBody").addEventListener("mouseover", (e) => {
+  $("dHist").addEventListener("click", (e) => {
+    const seg = e.target.closest(".hseg");
+    if (!seg) return;
+    const id = +seg.dataset.id;
+    const slot = S.sel.slot;
+    const l = lifeOf(slot, id);
+    if (S.sel.id !== id) TV.fit = true;
+    S.sel = { id, slot };
+    drawerKey = "";
+    treeKey = "";
+    if (!resolveSel(frame()).snap) seek(l.to != null ? Math.max(0, frameAfter(l.to - 1) - 1) : frameAfter(l.from));
+    else render(false);
+  });
+  // tree view: hover, zoom, pan
+  const tbox = $("tbox");
+  tbox.addEventListener("mouseover", (e) => {
     const g = e.target.closest(".lf");
-    const v = g ? +g.dataset.leaf : null;
-    if (v !== S.hoverLeaf) {
-      S.hoverLeaf = v;
-      for (const el of $("dBody").querySelectorAll(".lf")) el.classList.toggle("hl", +el.dataset.leaf === v);
-      renderPlot();
-    }
+    setHoverLeaf(g ? +g.dataset.leaf : null);
   });
-  $("dBody").addEventListener("mouseleave", () => {
-    if (S.hoverLeaf != null) {
-      S.hoverLeaf = null;
-      for (const el of $("dBody").querySelectorAll(".lf")) el.classList.remove("hl");
-      renderPlot();
-    }
+  tbox.addEventListener("mouseleave", () => setHoverLeaf(null));
+  tbox.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const r = tbox.getBoundingClientRect();
+      zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+    },
+    { passive: false }
+  );
+  let pan = null;
+  tbox.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    pan = { x: e.clientX, y: e.clientY, tx: TV.tx, ty: TV.ty, moved: false };
+    tbox.setPointerCapture(e.pointerId);
   });
+  tbox.addEventListener("pointermove", (e) => {
+    if (!pan) return;
+    const dx = e.clientX - pan.x;
+    const dy = e.clientY - pan.y;
+    if (!pan.moved && Math.hypot(dx, dy) < 3) return;
+    pan.moved = true;
+    tbox.classList.add("panning");
+    TV.tx = pan.tx + dx;
+    TV.ty = pan.ty + dy;
+    TV.fit = false;
+    applyTV();
+  });
+  const endPan = () => {
+    pan = null;
+    tbox.classList.remove("panning");
+  };
+  tbox.addEventListener("pointerup", endPan);
+  tbox.addEventListener("pointercancel", endPan);
+  tbox.addEventListener("dblclick", () => {
+    TV.fit = true;
+    renderTree(resolveSel(frame()).snap);
+  });
+  const center = (f) => zoomAt(tbox.clientWidth / 2, tbox.clientHeight / 2, f);
+  $("tIn").addEventListener("click", () => center(1.3));
+  $("tOut").addEventListener("click", () => center(1 / 1.3));
+  $("tFit").addEventListener("click", () => {
+    TV.fit = true;
+    renderTree(resolveSel(frame()).snap);
+  });
+  new ResizeObserver(() => {
+    if (!S.sel) return;
+    treeKey = "";
+    renderTree(resolveSel(frame()).snap);
+  }).observe(tbox);
 
   // log
   $("log").addEventListener("click", (e) => {
     const li = e.target.closest("li[data-t]");
     if (!li) return;
-    const t = +li.dataset.t;
     setPlaying(false);
-    S.fi = clamp(Math.ceil(((t + 1) / S.run.cfg.T) * (S.run.frames.length - 1)), 0, S.run.frames.length - 1);
+    S.fi = frameAfter(+li.dataset.t);
+    TV.fit = true;
     openDrawer({ id: +li.dataset.id, slot: +li.dataset.slot });
   });
 
   // plot hover
   const tip = $("tip");
   plot.addEventListener("mousemove", (e) => {
+    if (!S.run) return;
     const r = plot.getBoundingClientRect();
-    const x1 = LO + ((e.clientX - r.left) / r.width) * (HI - LO);
-    const x2 = HI - ((e.clientY - r.top) / r.height) * (HI - LO);
+    const u = LO + ((e.clientX - r.left) / r.width) * (HI - LO);
+    const w = HI - ((e.clientY - r.top) / r.height) * (HI - LO);
+    const sc = S.run.sc;
+    const [a, b] = axesOf(sc);
+    const v = baseVec();
+    v[a] = u;
+    v[b] = w;
     const fr = frame();
     const eta = S.run.cfg.params.eta;
     let F = 0;
-    for (const tr of fr.trees) F += eta * predictSnap(tr, x1, x2);
+    for (const tr of fr.trees) F += eta * predictSnap(tr, v);
     let html =
-      `<span class="muted">(${x1.toFixed(2)}, ${x2.toFixed(2)})</span><br>` +
-      (S.run.cfg.task === "cls" ? `p(y=1) = <b>${sigmoid(F).toFixed(3)}</b>` : `ŷ = <b>${F.toFixed(3)}</b>`);
+      `<span class="muted">${esc(sc.features[a].name)} ${esc(fmtRaw(sc.features[a], u))}, ${esc(sc.features[b].name)} ${esc(
+        fmtRaw(sc.features[b], w)
+      )}</span><br>` + (S.run.cfg.task === "cls" ? `p(y=1) = <b>${sigmoid(F).toFixed(3)}</b>` : `ŷ = <b>${F.toFixed(3)}</b>`);
     const rs = resolveSel(fr);
     let leaf = null;
     if (rs && rs.snap) {
-      leaf = leafIndexSnap(rs.snap, x1, x2);
+      leaf = leafIndexSnap(rs.snap, v);
       html += `<br>T${S.sel.id} leaf: η·w = <b>${(eta * rs.snap.nodes[leaf][4]).toFixed(3)}</b>`;
     }
     tip.innerHTML = html;
     tip.style.display = "block";
     const px = e.clientX - r.left;
     const py = e.clientY - r.top;
-    tip.style.left = Math.min(px + 14, r.width - tip.offsetWidth - 4) + "px";
+    tip.style.left = Math.max(4, Math.min(px + 14, r.width - tip.offsetWidth - 4)) + "px";
     tip.style.top = (py > r.height - 70 ? py - tip.offsetHeight - 10 : py + 14) + "px";
-    if (leaf !== S.hoverLeaf && rs && rs.snap) {
-      S.hoverLeaf = leaf;
-      for (const el of $("dBody").querySelectorAll(".lf")) el.classList.toggle("hl", +el.dataset.leaf === leaf);
-      renderPlot();
-    }
+    if (rs && rs.snap) setHoverLeaf(leaf);
   });
   plot.addEventListener("mouseleave", () => {
     tip.style.display = "none";
-    if (S.hoverLeaf != null) {
-      S.hoverLeaf = null;
-      for (const el of $("dBody").querySelectorAll(".lf")) el.classList.remove("hl");
-      renderPlot();
-    }
+    setHoverLeaf(null);
   });
 
   // timeline scrubbing
@@ -1315,47 +1632,53 @@ function bind() {
     }
   });
 
-  // resize & theme
   let rt = 0;
-  const onResize = () => {
+  new ResizeObserver(() => {
     clearTimeout(rt);
     rt = setTimeout(() => {
+      if (!S.run) return;
       layoutTimeline();
       render(false);
     }, 60);
-  };
-  new ResizeObserver(onResize).observe(document.querySelector("main"));
+  }).observe(document.querySelector("main"));
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     readColors();
     legendKey = "";
     drawerKey = "";
+    treeKey = "";
+    if (!S.run) return;
     layoutTimeline();
     render(false);
   });
 }
 
-export function start() {
+// URL hash: #task=reg&ds=fried&t=3000&sel=2  (jump to a state; handy for sharing)
+function hashParams() {
+  const h = {};
+  for (const part of location.hash.slice(1).split("&")) {
+    const [k, v] = part.split("=");
+    if (k) h[k] = decodeURIComponent(v || "");
+  }
+  return h;
+}
+
+export async function start() {
   readColors();
+  const h = hashParams();
+  if (h.task === "cls" || h.task === "reg") S.task = h.task;
+  if (h.ds && SCENARIOS[S.task].some((s) => s.id === h.ds)) S.scenario[S.task] = h.ds;
+  if (h.len) S.lengthSyn = clamp(+h.len, 2000, MAX_LEN);
   syncTask();
   fillScenarios();
-  buildParams();
   bind();
   setPlaying(false);
-  rerun(false);
-  const mt = location.hash.match(/task=(cls|reg)/);
-  if (mt && mt[1] !== S.task) {
-    S.task = mt[1];
-    syncTask();
-    fillScenarios();
-    buildParams();
-    rerun(false);
-  }
-  const m = location.hash.match(/t=(\d+)/);
-  if (m) seek(Math.round((+m[1] / S.run.cfg.T) * (S.run.frames.length - 1)));
-  else setPlaying(true);
-  const ms = location.hash.match(/sel=(\d+)/);
-  if (ms && m) {
-    const k = clamp(+ms[1] - 1, 0, S.run.S - 1);
-    openDrawer({ id: frame().trees[k].id, slot: k });
-  }
+  const run = await rerun(false);
+  if (!run) return;
+  if (h.t) {
+    seek(frameNear(+h.t));
+    if (h.sel) {
+      const k = clamp(+h.sel - 1, 0, S.run.S - 1);
+      openDrawer({ id: frame().trees[k].id, slot: k });
+    }
+  } else setPlaying(true);
 }
