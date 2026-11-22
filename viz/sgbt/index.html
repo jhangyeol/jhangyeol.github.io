@@ -780,7 +780,7 @@
         background: var(--bg);
         border-radius: 8px;
       }
-      .hist .seg {
+      .hist .hseg {
         position: absolute;
         top: 6px;
         height: 22px;
@@ -844,6 +844,158 @@
           grid-template-columns: repeat(2, 1fr);
         }
       }
+      /* ---------- v2: stable layout, slices, tree zoom ---------- */
+      .slot {
+        height: 150px;
+        min-height: 0;
+      }
+      .alt {
+        display: flex;
+        visibility: hidden;
+      }
+      .slot.warn .alt {
+        visibility: visible;
+      }
+      #log {
+        height: 172px;
+        max-height: none;
+      }
+      .concept {
+        white-space: nowrap;
+      }
+      .dsdesc {
+        margin: -4px 0 8px;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      .axes {
+        display: none;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+      .axes label {
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        color: var(--muted);
+      }
+      .axes select {
+        padding: 2px 6px;
+        font-size: 12px;
+      }
+      .status {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--card) 80%, transparent);
+        color: var(--muted);
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      .stats .st {
+        min-width: 150px;
+      }
+      .stats .st.sm {
+        min-width: 64px;
+      }
+      .stats .st span {
+        display: block;
+        white-space: nowrap;
+      }
+      .stats .st em {
+        display: block;
+        font-style: normal;
+        font-size: 11px;
+        color: var(--faint);
+        white-space: nowrap;
+      }
+      .dbody {
+        display: flex;
+        flex-direction: column;
+      }
+      .ovl-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .seg button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .tree-head {
+        margin-top: 4px;
+      }
+      .tree-head .sp {
+        flex: 1;
+      }
+      .zoom {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .zoom .btn {
+        padding: 1px 8px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .zoom span {
+        min-width: 36px;
+        text-align: center;
+      }
+      .fchips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 6px;
+        min-height: 16px;
+      }
+      .fchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .fchip i {
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        display: inline-block;
+      }
+      .treebox {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 260px;
+        max-height: none;
+        overflow: hidden;
+        cursor: grab;
+        touch-action: none;
+      }
+      .treebox.panning {
+        cursor: grabbing;
+      }
+      .treebox svg {
+        position: absolute;
+        inset: 0;
+      }
+      .treebox .empty-tree {
+        position: absolute;
+        inset: 0;
+        display: none;
+        padding-top: 40px;
+      }
+      #dHist {
+        flex: none;
+      }
     </style>
   </head>
   <body>
@@ -860,7 +1012,8 @@
         <label class="ctl"
           >Dataset
           <select id="scenario"></select
-        ></label>
+          ><button class="info" data-info="dataset" aria-label="Dataset 설명">i</button></label
+        >
         <label class="ctl"
           >Drift
           <select id="drift">
@@ -884,13 +1037,16 @@
           <span class="sp"></span>
           <div class="toggles">
             <button class="chip on" data-show="boundary">Boundary</button>
-            <button class="chip on" data-show="truth">True</button>
+            <button class="chip on" data-show="truth" id="chipTruth">True</button>
             <button class="chip on" data-show="points">Points</button>
           </div>
         </div>
+        <p class="dsdesc" id="dsDesc"></p>
+        <div class="axes" id="axes"></div>
         <div class="plot-wrap">
           <canvas id="plot"></canvas>
           <div id="tip"></div>
+          <div class="status" id="status"></div>
         </div>
         <div class="legend" id="legend"></div>
       </section>
@@ -958,7 +1114,25 @@
         <button class="info" data-info="tree">i</button>
         <button class="close" id="dClose" aria-label="닫기">×</button>
       </div>
-      <div class="dbody" id="dBody"></div>
+      <div class="dbody" id="dBody">
+        <div id="dInfo"></div>
+        <div class="dsec tree-head">
+          <h3>Structure</h3>
+          <span class="sp"></span>
+          <div class="zoom">
+            <button class="btn" id="tOut" title="축소">−</button>
+            <span class="num" id="tZoom">100%</span>
+            <button class="btn" id="tIn" title="확대">+</button>
+            <button class="btn" id="tFit" title="화면에 맞춤 (더블클릭)">Fit</button>
+          </div>
+        </div>
+        <div class="fchips" id="dFeat"></div>
+        <div class="treebox" id="tbox">
+          <svg id="tsvg" width="100%" height="100%"><g id="tg"></g></svg>
+          <div class="empty-tree" id="tEmpty">시간을 앞으로 이동하면 나타납니다.</div>
+        </div>
+        <div id="dHist"></div>
+      </div>
     </aside>
 
     <div class="pop" id="pop"></div>
